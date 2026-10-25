@@ -5,7 +5,9 @@ import 'atlas.dart';
 import 'guess.dart';
 import 'map.dart';
 import 'pin.dart';
+import 'route.dart';
 import 'rush.dart';
+import 'settings.dart';
 import 'store.dart';
 import 'ui.dart';
 import 'world.dart';
@@ -13,7 +15,7 @@ import 'world.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  await Future.wait([World.load(), Store.load()]);
+  await Future.wait([World.load(), Store.load(), loadEarth()]);
   runApp(const PangeaApp());
 }
 
@@ -42,12 +44,20 @@ class PangeaApp extends StatelessWidget {
   const PangeaApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Pangea',
-    debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
-    home: const Home(),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Store.instance,
+    builder: (context, _) => MaterialApp(
+      title: 'Pangea',
+      debugShowCheckedModeBanner: false,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: switch (Store.instance.theme) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
+      home: const Home(),
+    ),
   );
 }
 
@@ -71,13 +81,18 @@ class Home extends StatelessWidget {
               padding: const EdgeInsets.only(top: 16, bottom: 32),
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.only(left: 20, right: 8),
                   child: Row(
                     children: [
                       Expanded(child: Text('Pangea', style: display(34))),
                       Pill('${store.streak}', icon: Icons.local_fire_department_rounded),
                       const SizedBox(width: 6),
                       Pill('${store.known.length}/${World.instance.countries.length}', icon: Icons.public_rounded),
+                      IconButton(
+                        onPressed: () => _go(context, const SettingsPage()),
+                        icon: const Icon(Icons.tune_rounded),
+                        tooltip: tr('Settings', 'Réglages'),
+                      ),
                     ],
                   ),
                 ),
@@ -94,7 +109,17 @@ class Home extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
-                  child: Text(tr('Play', 'Jouer'), style: display(20)),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(tr('Play', 'Jouer'), style: display(20))),
+                      Segmented(
+                        values: Difficulty.values,
+                        label: (d) => d.label,
+                        selected: store.difficulty,
+                        onChanged: (d) => store.difficulty = d,
+                      ),
+                    ],
+                  ),
                 ),
                 RegionPicker(value: region, onChanged: (r) => store.region = r),
                 const SizedBox(height: 12),
@@ -103,6 +128,7 @@ class Home extends StatelessWidget {
                   child: GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
+                    padding: EdgeInsets.zero, // or it adds the system bar's inset
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
@@ -117,6 +143,11 @@ class Home extends StatelessWidget {
                         ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _RouteTile(onTap: () => _go(context, RoutePage(region: region))),
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -290,6 +321,53 @@ class _ModeTile extends StatelessWidget {
   }
 }
 
+/// Road trip: wide, with its stats.
+class _RouteTile extends StatelessWidget {
+  const _RouteTile({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    const mode = Mode.route;
+    final store = Store.instance;
+    return Bouncy(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: panel(context, color: tint(context, mode.color), border: mode.color.withValues(alpha: 0.16)),
+        child: Row(
+          children: [
+            const ModeBadge(mode, size: 38),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(mode.title, style: display(18)),
+                  Text(
+                    mode.hint,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            if (store.tripsDone > 0) ...[
+              Icon(Icons.emoji_events_rounded, size: 16, color: mode.color),
+              const SizedBox(width: 4),
+              Text(
+                '${store.tripsPerfect}/${store.tripsDone}',
+                style: display(14, color: mode.color, weight: FontWeight.w700),
+              ),
+            ] else
+              Icon(Icons.arrow_forward_rounded, size: 18, color: mode.color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AtlasTile extends StatelessWidget {
   const _AtlasTile({required this.onTap});
   final VoidCallback onTap;
@@ -334,7 +412,7 @@ class _AtlasTile extends StatelessWidget {
             ),
             SizedBox(
               height: 150,
-              child: IgnorePointer(child: WorldMap(fill: (c) => foundFill(c, known))),
+              child: IgnorePointer(child: WorldMap(fill: (c) => foundFill(c, known), dots: false)),
             ),
           ],
         ),

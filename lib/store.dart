@@ -11,7 +11,10 @@ class Store extends ChangeNotifier {
   Store(this._p) : _misses = Map<String, int>.from(jsonDecode(_p.getString('misses') ?? '{}'));
 
   static late Store instance;
-  static Future<void> load() async => instance = Store(await SharedPreferences.getInstance());
+  static Future<void> load() async {
+    instance = Store(await SharedPreferences.getInstance());
+    language = instance.languageSetting;
+  }
 
   final SharedPreferences _p;
   final Map<String, int> _misses;
@@ -22,14 +25,60 @@ class Store extends ChangeNotifier {
     notifyListeners();
   }
 
-  int best(String mode, Region? r) => _p.getInt('best.$mode.${r?.key ?? 'World'}') ?? 0;
+  // Settings.
+
+  Difficulty get difficulty => Difficulty.values.asNameMap()[_p.getString('difficulty')] ?? Difficulty.normal;
+  set difficulty(Difficulty d) {
+    _p.setString('difficulty', d.name);
+    notifyListeners();
+  }
+
+  /// 'system', 'light' or 'dark'.
+  String get theme => _p.getString('theme') ?? 'system';
+  set theme(String t) {
+    _p.setString('theme', t);
+    notifyListeners();
+  }
+
+  /// 'en', 'fr', or null to follow the phone.
+  String? get languageSetting => _p.getString('language');
+  set languageSetting(String? l) {
+    l == null ? _p.remove('language') : _p.setString('language', l);
+    language = l;
+    notifyListeners();
+  }
+
+  // Records, per game, region and difficulty. Hard plays every country, like v1.0 and v1.1 did: their records keep
+  // the old key.
+  String _bestKey(String mode, Region? r, Difficulty d) =>
+      'best.$mode.${r?.key ?? 'World'}${d == Difficulty.hard ? '' : '.${d.name}'}';
+
+  int best(String mode, Region? r, [Difficulty? d]) => _p.getInt(_bestKey(mode, r, d ?? difficulty)) ?? 0;
 
   /// Saves a score; true when it beats the record.
-  bool submit(String mode, Region? r, int score) {
-    if (score <= best(mode, r)) return false;
-    _p.setInt('best.$mode.${r?.key ?? 'World'}', score);
+  bool submit(String mode, Region? r, Difficulty d, int score) {
+    if (score <= best(mode, r, d)) return false;
+    _p.setInt(_bestKey(mode, r, d), score);
     notifyListeners();
     return true;
+  }
+
+  /// Road trips finished, and finished with the fewest countries possible.
+  int get tripsDone => _p.getInt('trips.done') ?? 0;
+  int get tripsPerfect => _p.getInt('trips.perfect') ?? 0;
+  void tripDone({required bool perfect}) {
+    _p.setInt('trips.done', tripsDone + 1);
+    if (perfect) _p.setInt('trips.perfect', tripsPerfect + 1);
+    notifyListeners();
+  }
+
+  /// Forgets scores, found countries, misses and the daily history; keeps the settings.
+  Future<void> resetProgress() async {
+    for (final k in _p.getKeys().toList()) {
+      if (!const {'difficulty', 'theme', 'language', 'region'}.contains(k)) await _p.remove(k);
+    }
+    _misses.clear();
+    notifyListeners();
   }
 
   /// Countries answered right at least once, in any game.
@@ -47,12 +96,13 @@ class Store extends ChangeNotifier {
     }
   }
 
-  /// Picks a country, favoring the ones often missed in [mode] and skipping [recent] ones.
+  /// Picks a country, favoring the ones often missed in [mode] (and on Hard, the obscure ones), skipping [recent].
   Country pick(String mode, List<Country> pool, math.Random rnd, {Iterable<String> recent = const []}) {
     final skip = recent.toSet();
     final options = pool.where((c) => !skip.contains(c.id)).toList();
     final from = options.isEmpty ? pool : options;
-    final weights = [for (final c in from) 1 + 3 * (_misses['$mode.${c.id}'] ?? 0)];
+    final hard = difficulty == Difficulty.hard;
+    final weights = [for (final c in from) (hard && c.level == 3 ? 2 : 1) + 3 * (_misses['$mode.${c.id}'] ?? 0)];
     var x = rnd.nextInt(weights.reduce((a, b) => a + b));
     for (var i = 0; i < from.length; i++) {
       x -= weights[i];

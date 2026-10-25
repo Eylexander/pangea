@@ -2,7 +2,7 @@ name: pangea
 description: "A geography game: flags, capitals, shapes, the map, and a daily mystery country."
 publish_to: 'none'
 
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.13.5
@@ -21,6 +21,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/world.json
+    - assets/earth.jpg
   fonts:
     # Plus Jakarta Sans, SIL Open Font License (assets/fonts/OFL.txt). Static weights: Flutter doesn't map
     # FontWeight onto a variable font's axis.

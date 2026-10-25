@@ -28,6 +28,14 @@ enum Mode {
     'Reconnais la silhouette',
     Color(0xFF0FA97A),
   ),
+  route(
+    Icons.alt_route_rounded,
+    'Road trip',
+    'Road trip',
+    'Cross borders from A to B',
+    'Passe les frontières de A à B',
+    Color(0xFF0B9DB8),
+  ),
   pin(Icons.place_rounded, 'Pin it', 'Épingle', 'Find it on a blank map', 'Place-le sur la carte', Color(0xFF2F7BFF)),
   daily(
     Icons.auto_awesome_rounded,
@@ -472,7 +480,10 @@ class BigButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final on = onTap != null;
-    final fg = on ? Colors.white : cs.onSurfaceVariant;
+    // Text that contrasts with the button, whatever its color: a light button (the "ink" one in dark mode) gets dark
+    // text.
+    final light = ThemeData.estimateBrightnessForColor(color) == Brightness.light;
+    final fg = !on ? cs.onSurfaceVariant : (light ? const Color(0xFF15131D) : Colors.white);
     return Bouncy(
       onTap: onTap,
       child: AnimatedContainer(
@@ -654,6 +665,63 @@ class GameBar extends StatelessWidget {
             ),
           ),
           ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// A row of mutually exclusive options; the chosen one is inked.
+class Segmented<T> extends StatelessWidget {
+  const Segmented({
+    super.key,
+    required this.values,
+    required this.label,
+    required this.selected,
+    required this.onChanged,
+  });
+  final List<T> values;
+  final String Function(T) label;
+  final T selected;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: panel(context, radius: 14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final v in values)
+            Flexible(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChanged(v);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: v == selected ? cs.onSurface : null,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Text(
+                    label(v),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: v == selected ? cs.surface : cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

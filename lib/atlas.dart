@@ -6,7 +6,8 @@ import 'ui.dart';
 import 'world.dart';
 
 /// Countries found in any game take their continent's color; the others stay plain land.
-Color? foundFill(Country c, Set<String> known) => known.contains(c.id) ? regionColor(c.region) : null;
+Color? foundFill(Country c, Set<String> known) =>
+    known.contains(c.id) ? regionColor(c.region).withValues(alpha: 0.62) : null;
 
 /// The world map to explore: tap a country to learn about it.
 class AtlasPage extends StatefulWidget {
@@ -57,7 +58,7 @@ class _AtlasPageState extends State<AtlasPage> {
               key: _map,
               view: _viewOf(_region),
               padding: const EdgeInsets.only(top: 200, left: 12, right: 12, bottom: 70),
-              fill: (c) => c == _selected ? palette.ink : foundFill(c, known),
+              fill: (c) => c == _selected ? palette.ink.withValues(alpha: 0.7) : foundFill(c, known),
               pulse: _selected,
               onTap: (lon, lat, hit) {
                 if (hit != null) _open(hit);

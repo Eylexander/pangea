@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:pangea/guess.dart';
+import 'package:pangea/route.dart';
 import 'package:pangea/store.dart';
 import 'package:pangea/world.dart';
 
@@ -67,5 +69,38 @@ void main() {
     expect(Store.today(DateTime(2026, 10, 25)), 298);
     expect(Store.dailyCountry(5), Store.dailyCountry(5));
     expect(Store.dailyCountry(5).hasShape, isTrue);
+  });
+
+  test('land borders, enclaves and pass-through territories', () {
+    expect(c('FRA').neighborIds, containsAll(['ESP', 'BEL', 'BRA'])); // Brazil through French Guiana
+    expect(c('LSO').neighborIds, ['ZAF']); // an enclave, a hole in South Africa
+    expect(c('MAR').neighborIds, contains('MRT')); // through Western Sahara
+    expect(c('JPN').neighborIds, isEmpty);
+  });
+
+  test('road trips', () {
+    final trip = Trip(c('FRA'), c('POL'));
+    expect(trip.steps, 2);
+    expect(trip.shortest(), [c('FRA'), c('DEU'), c('POL')]);
+    expect(trip.linked([c('DEU')]), isTrue);
+    expect(trip.linked([c('BEL')]), isFalse);
+    expect(trip.detour(c('DEU')), 0);
+    expect(trip.detour(c('BEL')), 1);
+    expect(trip.detour(c('JPN')), isNull);
+  });
+
+  test('difficulty pools', () {
+    final w = World.instance;
+    expect(w.pool(null, Difficulty.easy), hasLength(70));
+    expect(w.pool(null, Difficulty.normal), hasLength(145));
+    expect(w.pool(null, Difficulty.hard), hasLength(197));
+    expect(w.pool(Region.oceania, Difficulty.easy).length, greaterThanOrEqualTo(8));
+    expect(c('USA').level, 1);
+    expect(c('TUV').level, 3);
+  });
+
+  test('button text contrasts with light and dark colors', () {
+    expect(ThemeData.estimateBrightnessForColor(const Color(0xFFF2F1F7)), Brightness.light); // ink in dark mode
+    expect(ThemeData.estimateBrightnessForColor(const Color(0xFF2F7BFF)), Brightness.dark);
   });
 }

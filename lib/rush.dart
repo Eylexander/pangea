@@ -28,6 +28,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
   );
   final _rnd = math.Random();
   late final List<Country> _pool;
+  final _difficulty = Store.instance.difficulty;
   final _recent = <String>[];
   final _mistakes = <Country>[];
 
@@ -44,7 +45,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _pool = World.instance.inRegion(widget.region).where((c) => mode != Mode.shapes || c.hasShape).toList();
+    _pool = World.instance.pool(widget.region, _difficulty).where((c) => mode != Mode.shapes || c.hasShape).toList();
     _clock.addStatusListener((s) {
       if (s == AnimationStatus.completed) _finish();
     });
@@ -65,7 +66,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
     _recent.add(_target.id);
     if (_recent.length > math.min(15, _pool.length ~/ 2)) _recent.removeAt(0);
     // Wrong options from the same region when possible: Niger vs Nigeria teaches more than Niger vs Japan.
-    final near = World.instance.inRegion(_target.region).where((c) => c != _target).toList()..shuffle(_rnd);
+    final near = World.instance.pool(_target.region, _difficulty).where((c) => c != _target).toList()..shuffle(_rnd);
     final far = World.instance.countries.where((c) => c != _target).toList()..shuffle(_rnd);
     final options = <Country>[_target];
     for (final c in [...near, ...far]) {
@@ -108,7 +109,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
     _next?.cancel();
     setState(() {
       _over = true;
-      _record = Store.instance.submit(mode.name, widget.region, _score);
+      _record = Store.instance.submit(mode.name, widget.region, _difficulty, _score);
     });
     HapticFeedback.mediumImpact();
   }
@@ -129,7 +130,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
           children: [
             GameBar(
               title: mode.title,
-              subtitle: where,
+              subtitle: '$where · ${_difficulty.label}',
               trailing: _over ? null : _ScoreBadge(score: _score, multiplier: _multiplier, color: mode.color),
             ),
             Expanded(
@@ -142,7 +143,7 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
                         title: tr("Time's up", 'Temps écoulé'),
                         score: _score,
                         record: _record,
-                        best: Store.instance.best(mode.name, widget.region),
+                        best: Store.instance.best(mode.name, widget.region, _difficulty),
                         summary: tr(
                           '$_right right answers · ${_mistakes.length} to review',
                           '$_right bonnes réponses · ${_mistakes.length} à revoir',

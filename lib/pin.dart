@@ -21,7 +21,8 @@ class _PinPageState extends State<PinPage> {
   static const rounds = 10;
   final _map = GlobalKey<WorldMapState>();
   final _rnd = math.Random();
-  late final _pool = World.instance.inRegion(widget.region);
+  final _difficulty = Store.instance.difficulty;
+  late final _pool = World.instance.pool(widget.region, _difficulty);
   final _done = <({Country c, double km, int points})>[];
 
   late Country _target;
@@ -70,7 +71,7 @@ class _PinPageState extends State<PinPage> {
     if (_done.length < rounds) return setState(_nextRound);
     setState(() {
       _over = true;
-      _record = Store.instance.submit(Mode.pin.name, widget.region, _score);
+      _record = Store.instance.submit(Mode.pin.name, widget.region, _difficulty, _score);
     });
   }
 
@@ -85,14 +86,14 @@ class _PinPageState extends State<PinPage> {
         body: SafeArea(
           child: Column(
             children: [
-              GameBar(title: '${Mode.pin.title} · $where'),
+              GameBar(title: Mode.pin.title, subtitle: '$where · ${_difficulty.label}'),
               Expanded(
                 child: Results(
                   mode: Mode.pin,
                   title: tr('Trip complete!', 'Voyage terminé !'),
                   score: _score,
                   record: _record,
-                  best: Store.instance.best(Mode.pin.name, widget.region),
+                  best: Store.instance.best(Mode.pin.name, widget.region, _difficulty),
                   summary: tr(
                     '$inside/$rounds spot on · ${fmtKm(avg)} off on average',
                     '$inside/$rounds en plein dans le mille · ${fmtKm(avg)} d\'écart en moyenne',
@@ -121,9 +122,9 @@ class _PinPageState extends State<PinPage> {
               key: _map,
               view: _view,
               padding: const EdgeInsets.only(top: 190, bottom: 120, left: 16, right: 16),
-              fill: _revealed ? (c) => c == _target ? good : null : null,
+              fill: _revealed ? (c) => c == _target ? answer.withValues(alpha: 0.8) : null : null,
               pulse: _revealed ? _target : null,
-              pulseColor: good,
+              pulseColor: answer,
               marks: [
                 if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, palette.ink),
                 if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.color),
@@ -145,7 +146,8 @@ class _PinPageState extends State<PinPage> {
                   child: Column(
                     children: [
                       GameBar(
-                        title: '${Mode.pin.title} · $where',
+                        title: Mode.pin.title,
+                        subtitle: '$where · ${_difficulty.label}',
                         trailing: Text(fmtInt(_score), style: display(22)),
                       ),
                       Padding(

@@ -21,6 +21,14 @@ MERGE = {'SOL': 'SOM', 'CYN': 'CYP', 'ESB': 'CYP', 'WSB': 'CYP', 'CNM': 'CYP', '
 # Non-sovereign units that still count as the country (their sovereign is split into several units).
 EXTRA = {'CHN', 'FRA', 'FIN', 'DNK', 'GBR', 'NLD', 'USA', 'AUS', 'NZL', 'ISR', 'KOS', 'PSX'}
 
+# Units that aren't played but that a road trip may cross: Morocco to Mauritania goes through Western Sahara.
+PASS_THROUGH = {'SAH'}
+# Small but famous: easier than their size suggests.
+FAMOUS = {'VAT', 'MCO', 'SGP', 'LUX', 'ISL', 'QAT', 'ISR', 'CHE', 'NLD', 'BEL', 'DNK', 'IRL', 'PRT', 'GRC', 'CUB',
+          'JAM', 'NZL', 'KOR', 'PRK', 'TWN', 'AUT', 'CZE', 'HUN', 'MLT', 'CYP', 'LBN', 'KWT', 'ARE', 'PAN', 'CRI', 'HTI',
+          'DOM', 'NPL', 'LKA', 'FJI', 'MDV', 'BHS', 'URY', 'JOR', 'PSX', 'BTN', 'SMR', 'AND', 'LIE', 'SWE', 'NOR', 'FIN',
+          'THA', 'VNM', 'SAU', 'MAR', 'KEN', 'JPN', 'TUR', 'ZAF', 'PHL'}
+
 # id: (English, French), capital (English, French), extra names accepted when typing
 COUNTRIES = {
     'AFG': (None, None, 'Kabul', 'Kaboul'),
@@ -291,6 +299,46 @@ def gap_km(a, b):
     return 111 * math.hypot(dx * math.cos(lat), dy)
 
 
+def neighbors(units):
+    """Land borders, from the full-resolution outlines: Natural Earth's neighbors share their border vertices."""
+    owners = {}
+    for uid, u in units.items():
+        for ring in (r for poly in u['polys'] for r in poly):  # holes too: Lesotho is South Africa's hole
+            for x, y in ring:
+                owners.setdefault((round(x, 6), round(y, 6)), set()).add(uid)
+    shared = {}
+    for ids in owners.values():
+        for a in ids:
+            for b in ids:
+                if a < b:
+                    shared[a, b] = shared.get((a, b), 0) + 1
+    nb = {uid: set() for uid in units}
+    for (a, b), n in shared.items():
+        if n >= 2:
+            nb[a].add(b)
+            nb[b].add(a)
+    for hub in PASS_THROUGH:
+        for a in nb[hub]:
+            nb[a] |= nb[hub] - {a}
+    return nb
+
+
+def levels(entries, nb):
+    """1 easy, 2 normal, 3 hard: big or populous countries first, small island states last."""
+    def score(e):
+        s = math.log10(max(e['pop'], 1)) + 0.6 * math.log10(max(e['area'], 1))
+        if e['reg'] in ('Europe', 'Americas'):
+            s += 0.7
+        if not nb[e['id']] and e['area'] < 30000:
+            s -= 1.5
+        if e['id'] in FAMOUS:
+            s += 2
+        return s
+
+    ranked = sorted(entries, key=score, reverse=True)
+    return {e['id']: 1 if i < 70 else 2 if i < 145 else 3 for i, e in enumerate(ranked)}
+
+
 def main():
     src_dir = sys.argv[1] if len(sys.argv) > 1 else '.'
     path = os.path.join(src_dir, 'ne_10m_admin_0_countries.geojson')
@@ -345,7 +393,7 @@ def main():
 
         entry = {'id': uid, 'q': 1 if quiz else 0, 'iso': p['ISO_A2_EH'], 'en': p['NAME_EN'], 'fr': p['NAME_FR'],
                  'reg': p['REGION_UN'], 'pop': round(p['POP_EST']), 'area': round(area), 'lx': round(p['LABEL_X'], 3),
-                 'ly': round(p['LABEL_Y'], 3), 'col': p['MAPCOLOR7'], 'main': main_count, 'p': enc}
+                 'ly': round(p['LABEL_Y'], 3), 'main': main_count, 'p': enc}
         if quiz:
             en, fr, cap_en, cap_fr, *alias = COUNTRIES[uid]
             entry.update(en=en or p['NAME_EN'], fr=fr or p['NAME_FR'], capEn=cap_en, capFr=cap_fr)
@@ -354,6 +402,12 @@ def main():
 
     out.sort(key=lambda e: (-e['q'], e['id']))
     quiz_ids = {e['id'] for e in out if e['q']}
+    nb = neighbors(units)
+    lv = levels([e for e in out if e['q']], nb)
+    for e in out:
+        if e['q']:
+            e['lv'] = lv[e['id']]
+            e['nb'] = sorted(nb[e['id']] & quiz_ids)
     assert quiz_ids == set(COUNTRIES), (quiz_ids ^ set(COUNTRIES))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:

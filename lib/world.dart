@@ -5,9 +5,22 @@ import 'dart:ui';
 
 import 'package:flutter/services.dart';
 
-/// French when the phone is in French, English otherwise.
-final bool fr = PlatformDispatcher.instance.locale.languageCode == 'fr';
+/// 'en' or 'fr' when chosen in the settings; null follows the phone (French if it's in French, else English).
+String? language;
+bool get fr => (language ?? PlatformDispatcher.instance.locale.languageCode) == 'fr';
 String tr(String en, String french) => fr ? french : en;
+
+/// Which countries come up. Easy: the 70 best known; Normal: 145; Hard: all 197, the obscure ones more often.
+enum Difficulty {
+  easy('Easy', 'Facile'),
+  normal('Normal', 'Normal'),
+  hard('Hard', 'Difficile');
+
+  const Difficulty(this.en, this.french);
+  final String en, french;
+  String get label => tr(en, french);
+  int get level => index + 1;
+}
 
 enum Region {
   africa('Africa', 'Africa', 'Afrique', Rect.fromLTRB(-20, -36, 55, 38)),
@@ -47,7 +60,8 @@ class Country {
       area = j['area'],
       lon = (j['lx'] as num).toDouble(),
       lat = (j['ly'] as num).toDouble(),
-      color = j['col'],
+      level = j['lv'] ?? 3,
+      neighborIds = List<String>.from(j['nb'] ?? const []),
       mainCount = j['main'],
       polygons = [
         for (final poly in j['p'] as List) [for (final ring in poly as List) _decode(ring as List)],
@@ -75,7 +89,13 @@ class Country {
   final bool quiz;
   final List<String> aliases;
   final Region? region;
-  final int population, area, color, mainCount;
+  final int population, area, mainCount;
+
+  /// 1 well known, 2 less so, 3 obscure (small island states, microstates). See tool/build_world.py.
+  final int level;
+
+  /// Countries across a land border.
+  final List<String> neighborIds;
   final double lon, lat;
 
   /// Polygons, each a list of rings (outer first, then holes) as [lon, lat, lon, lat, ...] in degrees.
@@ -162,6 +182,32 @@ class World {
   }
 
   List<Country> inRegion(Region? r) => r == null ? countries : countries.where((c) => c.region == r).toList();
+
+  /// The countries a game draws from. Too few for a continent at this level (Oceania on Easy): the next level too.
+  List<Country> pool(Region? r, Difficulty d) {
+    final all = inRegion(r);
+    for (var level = d.level; level <= 3; level++) {
+      final p = all.where((c) => c.level <= level).toList();
+      if (p.length >= 8 || level == 3) return p;
+    }
+    return all;
+  }
+
+  List<Country> neighbors(Country c) => [for (final id in c.neighborIds) byId[id]!];
+
+  /// Steps from [from] to every country reachable over land.
+  Map<Country, int> distances(Country from) {
+    final d = {from: 0};
+    final queue = [from];
+    for (var i = 0; i < queue.length; i++) {
+      for (final n in neighbors(queue[i])) {
+        if (d.containsKey(n)) continue;
+        d[n] = d[queue[i]]! + 1;
+        queue.add(n);
+      }
+    }
+    return d;
+  }
 
   /// Countries whose name (either language, or an alias) matches what was typed, best first.
   List<Country> search(String query, {int limit = 6}) {
