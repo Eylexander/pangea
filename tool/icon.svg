@@ -1,0 +1,19 @@
+<!-- Launcher icon (same paths as android/app/src/main/res/drawable/ic_launcher_*.xml), cropped to the
+     72dp visible area for store listings: rsvg-convert -w 512 tool/icon.svg -o icon.png -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF3D9A"/>
+      <stop offset="0.55" stop-color="#7B4DFF"/>
+      <stop offset="1" stop-color="#22C3FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="72" height="72" rx="16" fill="url(#bg)"/>
+  <g fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round">
+    <circle cx="48" cy="60" r="19"/>
+    <ellipse cx="48" cy="60" rx="8" ry="19"/>
+    <path d="M29,60 H67 M32,50 H64 M32,70 H64"/>
+  </g>
+  <path d="M66,61 C61,53 56,48 56,41 A10,10 0 1 1 76,41 C76,48 71,53 66,61 Z" fill="#FFD34D" stroke="#6A4BF0" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="66" cy="41" r="3.6" fill="#6A4BF0"/>
+</svg>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icons: the globe and the pin in one color, the pin cut out of the globe. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="4" android:strokeLineCap="round"
+        android:pathData="M29,60 A19,19 0 1 0 67,60 A19,19 0 1 0 29,60 Z M40,60 A8,19 0 1 0 56,60 A8,19 0 1 0 40,60 Z M29,60 H67 M32,50 H64 M32,70 H64" />
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+        android:pathData="M66,61 C61,53 56,48 56,41 A10,10 0 1 1 76,41 C76,48 71,53 66,61 Z M62.4,41 A3.6,3.6 0 1 0 69.6,41 A3.6,3.6 0 1 0 62.4,41 Z" />
+</vector>

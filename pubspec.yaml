@@ -1,0 +1,28 @@
+name: pangea
+description: "A geography game: flags, capitals, shapes, the map, and a daily mystery country."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/world.json
+  fonts:
+    # Lilita One, SIL Open Font License (assets/fonts/OFL.txt). Titles and numbers only.
+    - family: Lilita
+      fonts:
+        - asset: assets/fonts/LilitaOne-Regular.ttf
