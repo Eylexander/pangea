@@ -75,6 +75,8 @@ screen. The release APK
 builds and is signed with `db171ead…`. Not checked: the share text pasted in another app,
 a real phone (performance of the 87k-point map on low-end devices), the themed icon on a launcher.
 
+v1.0.0 was released on 2026-10-25 (versionCode 1, CI-signed `db171ead…`) and is listed in the F-Droid repo.
+
 ## Emulator gotcha
 
 After the keyboard had been used and the APK reinstalled, the whole app once showed grayed out (window composited
