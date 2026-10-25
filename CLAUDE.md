@@ -31,9 +31,10 @@ numpy and Pillow aren't installed system-wide: use a throwaway venv (`python -m 
   the shared `Eylexander/fdroid/.github/workflows/flutter-apk.yml` (versionCode = run number, so keep the file's name).
 - **Release notes are written by hand**, the user asked for releases that read as human-made: short, plain, first
   person, no emoji headers or "What's Changed" lists. The shared workflow generates notes; replace them right after
-  with `gh release edit vX.Y.Z -R Eylexander/pangea --notes-file …`. Same tone for the F-Droid "What's new":
-  `../fdroid/metadata/com.eylexander.pangea/<locale>/changelogs/<versionCode>.txt` (versionCode = the release run's
-  number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3).
+  with `gh release edit vX.Y.Z -R Eylexander/pangea --notes-file …`. The F-Droid listing also keeps a changelog per
+  version, same tone (`../fdroid/metadata/com.eylexander.pangea/<locale>/changelogs/<versionCode>.txt`, versionCode
+  = the release run's number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3), but F-Droid clients don't show them for this
+  repo; see `../fdroid/CLAUDE.md`.
 - Keep `version:` in pubspec.yaml in step with the tag (CI overrides it, but debug builds show it in Settings).
 - Release key: `.secrets/` (git-ignored), the shared key, SHA-256 `db171ead…`. CI gets it from the
   `RELEASE_KEYSTORE_BASE64` / `RELEASE_KEYSTORE_PASS` secrets. Never regenerate or lose it.
