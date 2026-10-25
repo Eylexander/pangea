@@ -17,17 +17,24 @@ Future<void> main() async {
   runApp(const PangeaApp());
 }
 
+/// Neutral surfaces with a violet tint; each game brings its own accent (`Mode.color`).
 ThemeData _theme(Brightness b) {
   final dark = b == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF6C4DFF),
-    brightness: b,
-    dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
-  ).copyWith(surface: dark ? const Color(0xFF13112B) : const Color(0xFFFAF8FF));
+  final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF6C4DFF), brightness: b).copyWith(
+    surface: dark ? const Color(0xFF0E0D14) : const Color(0xFFF5F4F9),
+    surfaceContainerLowest: dark ? const Color(0xFF17161F) : Colors.white,
+    surfaceContainerHighest: dark ? const Color(0xFF24222E) : const Color(0xFFEBE9F1),
+    outlineVariant: dark ? const Color(0xFF2B2936) : const Color(0xFFE4E1EB),
+    onSurface: dark ? const Color(0xFFF2F1F7) : const Color(0xFF15131D),
+    onSurfaceVariant: dark ? const Color(0xFF9C99AB) : const Color(0xFF6A6779),
+  );
   return ThemeData(
     colorScheme: scheme,
+    fontFamily: 'Jakarta',
     scaffoldBackgroundColor: scheme.surface,
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: scheme.surface),
+    dividerTheme: DividerThemeData(color: scheme.outlineVariant),
   );
 }
 
@@ -58,57 +65,48 @@ class Home extends StatelessWidget {
         listenable: store,
         builder: (context, _) {
           final region = store.region;
-          final known = store.known.length;
           return SafeArea(
             bottom: false,
             child: ListView(
-              padding: const EdgeInsets.only(top: 12, bottom: 32),
+              padding: const EdgeInsets.only(top: 16, bottom: 32),
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: ShaderMask(
-                          shaderCallback: (r) =>
-                              const LinearGradient(colors: [Color(0xFFFF3D9A), Color(0xFF7B4DFF), Color(0xFF22C3FF)])
-                                  .createShader(r),
-                          child: Text('Pangea', style: display(48, color: Colors.white)),
-                        ),
-                      ),
-                      Pill('🔥 ${store.streak}'),
+                      Expanded(child: Text('Pangea', style: display(34))),
+                      Pill('${store.streak}', icon: Icons.local_fire_department_rounded),
                       const SizedBox(width: 6),
-                      Pill('🌍 $known/${World.instance.countries.length}'),
+                      Pill('${store.known.length}/${World.instance.countries.length}', icon: Icons.public_rounded),
                     ],
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 2, 20, 18),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                   child: Text(
                     tr('How well do you know the world?', 'Tu connais vraiment le monde ?'),
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15, fontWeight: FontWeight.w500),
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _DailyCard(onTap: () => _go(context, GuessPage(day: Store.today()))),
                 ),
-                const SizedBox(height: 26),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                  child: Text(tr('Play', 'Jouer'), style: display(26)),
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+                  child: Text(tr('Play', 'Jouer'), style: display(20)),
                 ),
                 RegionPicker(value: region, onChanged: (r) => store.region = r),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 0.92,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.02,
                     children: [
                       for (final m in [Mode.flags, Mode.capitals, Mode.shapes, Mode.pin])
                         _ModeTile(
@@ -120,7 +118,7 @@ class Home extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _AtlasTile(onTap: () => _go(context, const AtlasPage())),
@@ -140,6 +138,7 @@ class _DailyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final day = Store.today();
     final target = Store.dailyCountry(day);
     final guesses = Store.instance.dailyGuesses(day);
@@ -148,70 +147,90 @@ class _DailyCard extends StatelessWidget {
     final now = DateTime.now();
     final left = DateTime(now.year, now.month, now.day + 1).difference(now);
     final next = tr(
-      'next in ${left.inHours} h ${left.inMinutes % 60} min',
+      'next in ${left.inHours} h ${left.inMinutes % 60}',
       'suivant dans ${left.inHours} h ${left.inMinutes % 60}',
     );
-    final status = !done
-        ? (guesses.isEmpty
-              ? tr('▶  Play today\'s', '▶  Jouer celui du jour')
-              : tr('▶  ${guesses.length}/$maxGuesses, keep going', '▶  ${guesses.length}/$maxGuesses, continue'))
+    final (icon, status) = !done
+        ? (
+            Icons.play_arrow_rounded,
+            guesses.isEmpty
+                ? tr('Play', 'Jouer')
+                : tr('Continue · ${guesses.length}/$maxGuesses', 'Continuer · ${guesses.length}/$maxGuesses'),
+          )
         : won
-        ? tr('✓ Found in ${guesses.length} · $next', '✓ Trouvé en ${guesses.length} · $next')
-        : tr('✗ Missed · $next', '✗ Raté · $next');
+        ? (Icons.check_rounded, tr('Found in ${guesses.length} · $next', 'Trouvé en ${guesses.length} · $next'))
+        : (Icons.close_rounded, tr('Missed · $next', 'Raté · $next'));
+    const ink = Color(0xFF17142B);
+    final base = dark ? const Color(0xFF1D1934) : ink;
     return Bouncy(
       onTap: onTap,
       child: Container(
-        height: 176,
+        height: 184,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          gradient: Mode.daily.gradient,
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [
-            BoxShadow(
-              color: Mode.daily.colors.last.withValues(alpha: 0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(26),
+          // A soft light in the corner, in the game's accent.
+          gradient: RadialGradient(
+            center: const Alignment(0.95, -1),
+            radius: 1.3,
+            colors: [Color.alphaBlend(Mode.daily.color.withValues(alpha: 0.55), base), base],
+          ),
         ),
         child: Stack(
           children: [
             Positioned(
-              right: 12,
-              top: 16,
-              bottom: 16,
-              width: 130,
+              right: 18,
+              top: 22,
+              bottom: 22,
+              width: 128,
               child: done
-                  ? Center(child: Text(target.flag, style: const TextStyle(fontSize: 84)))
-                  : ShapeView(target, colors: [Colors.white, Colors.white.withValues(alpha: 0.8)]),
+                  ? Center(child: Text(target.flag, style: const TextStyle(fontSize: 76)))
+                  : ShapeView(target, color: Colors.white.withValues(alpha: 0.92)),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 146, 18),
+              padding: const EdgeInsets.fromLTRB(22, 20, 156, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${Mode.daily.emoji}  #$day', style: display(18, color: Colors.white70)),
-                  const SizedBox(height: 4),
+                  Text(
+                    '${tr('DAILY', 'DU JOUR')}  ·  #$day',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(Mode.daily.title, style: display(28, color: Colors.white)),
+                    child: Text(Mode.daily.title, style: display(25, color: Colors.white)),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     Mode.daily.hint,
                     maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, height: 1.2),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13.5, height: 1.3),
                   ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(99)),
-                    child: Text(
-                      status,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w800, color: Mode.daily.colors.last, fontSize: 13),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 18, color: ink),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700, color: ink, fontSize: 13),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -231,62 +250,44 @@ class _ModeTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Bouncy(
-    onTap: onTap,
-    child: Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        gradient: mode.gradient,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(color: mode.colors.last.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -18,
-            bottom: -22,
-            child: Transform.rotate(
-              angle: -0.25,
-              child: Opacity(opacity: 0.22, child: Text(mode.emoji, style: const TextStyle(fontSize: 96))),
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Bouncy(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: panel(context, color: tint(context, mode.color), border: mode.color.withValues(alpha: 0.16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ModeBadge(mode, size: 38),
+            const Spacer(),
+            Text(mode.title, style: display(18)),
+            const SizedBox(height: 3),
+            SizedBox(
+              height: 34, // two lines, so titles line up whatever the hint's length
+              child: Text(
+                mode.hint,
+                maxLines: 2,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w500),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 8),
+            Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), shape: BoxShape.circle),
-                  child: Text(mode.emoji, style: const TextStyle(fontSize: 26)),
-                ),
-                const Spacer(),
-                Text(mode.title, style: display(24, color: Colors.white)),
-                const SizedBox(height: 2),
-                SizedBox(
-                  height: 34, // two lines, so titles line up whatever the hint's length
-                  child: Text(
-                    mode.hint,
-                    maxLines: 2,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13, height: 1.2),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                Icon(best == 0 ? Icons.arrow_forward_rounded : Icons.emoji_events_rounded, size: 16, color: mode.color),
+                const SizedBox(width: 5),
                 Text(
-                  best == 0 ? tr('New!', 'À toi de jouer !') : '🏆 ${fmtInt(best)}',
-                  style: display(16, color: Colors.white),
+                  best == 0 ? tr('Start', 'Commencer') : fmtInt(best),
+                  style: display(14, color: mode.color, weight: FontWeight.w700),
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _AtlasTile extends StatelessWidget {
@@ -295,46 +296,45 @@ class _AtlasTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final cs = Theme.of(context).colorScheme;
     final known = Store.instance.known;
     return Bouncy(
       onTap: onTap,
       child: Container(
-        height: 190,
+        decoration: panel(context),
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          gradient: Mode.atlas.gradient,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(color: Mode.atlas.colors.last.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 8)),
-          ],
-        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
               child: Row(
                 children: [
-                  Text('${Mode.atlas.emoji}  ${Mode.atlas.title}', style: display(24, color: Colors.white)),
-                  const SizedBox(width: 10),
+                  const ModeBadge(Mode.atlas, size: 38),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      Mode.atlas.hint,
-                      maxLines: 2,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(Mode.atlas.title, style: display(18)),
+                        Text(
+                          Mode.atlas.hint,
+                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ),
                   ),
+                  Text(
+                    '${known.length}/${World.instance.countries.length}',
+                    style: display(15, color: cs.onSurfaceVariant, weight: FontWeight.w700),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
-                child: IgnorePointer(child: WorldMap(fill: (c) => knownFill(c, brightness, known))),
-              ),
+            SizedBox(
+              height: 150,
+              child: IgnorePointer(child: WorldMap(fill: (c) => foundFill(c, known))),
             ),
           ],
         ),

@@ -4,18 +4,40 @@ import 'package:flutter/material.dart';
 
 import 'world.dart';
 
-/// Land colors by Natural Earth's MAPCOLOR7 (neighbors never share one).
-const _landLight = [
-  Color(0xFFFFB4A2), Color(0xFFFFD166), Color(0xFF9BE7C4), Color(0xFFA0C4FF), //
-  Color(0xFFCDB4FF), Color(0xFFFFC8DD), Color(0xFFB5E48C),
-];
-const _landDark = [
-  Color(0xFFE76F51), Color(0xFFE9C46A), Color(0xFF2A9D8F), Color(0xFF4D7CFE), //
-  Color(0xFF9D4EDD), Color(0xFFEF476F), Color(0xFF76C893),
-];
+/// A calm two-tone map: neutral land on a soft ocean, hairline borders. Color is kept for what means something
+/// (the answer, a pin, the countries found).
+class MapPalette {
+  const MapPalette._(this.ocean, this.land, this.border, this.territory, this.ink);
 
-Color landColor(Country c, Brightness b) => (b == Brightness.dark ? _landDark : _landLight)[(c.color - 1) % 7];
-Color oceanColor(Brightness b) => b == Brightness.dark ? const Color(0xFF0E1B4D) : const Color(0xFFB9E3FF);
+  final Color ocean, land, border, territory, ink;
+
+  static const light = MapPalette._(
+    Color(0xFFDCE6F2),
+    Color(0xFFFFFFFF),
+    Color(0xFFBCC7D6),
+    Color(0xFFEEF1F6),
+    Color(0xFF1A1D29),
+  );
+  static const dark = MapPalette._(
+    Color(0xFF0B0F19),
+    Color(0xFF1E2333),
+    Color(0xFF363F57),
+    Color(0xFF151A27),
+    Color(0xFFE9ECF5),
+  );
+
+  static MapPalette of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? dark : light;
+}
+
+/// One color per continent, for the countries found in the Atlas.
+Color regionColor(Region? r) => switch (r) {
+  Region.africa => const Color(0xFFF29D0C),
+  Region.americas => const Color(0xFFFF5B4A),
+  Region.asia => const Color(0xFF0FA97A),
+  Region.europe => const Color(0xFF2F7BFF),
+  Region.oceania => const Color(0xFF7B5CFF),
+  null => const Color(0xFF8A8FA3),
+};
 
 /// A pin or a line drawn over the map (lon/lat).
 class MapMark {
@@ -57,23 +79,6 @@ Path countryPath(Country c) => _paths.putIfAbsent(c.id, () {
   return path;
 });
 
-final Path _graticule = () {
-  final path = Path();
-  for (var lat = -30; lat <= 60; lat += 30) {
-    for (var lon = -180; lon <= 180; lon += 5) {
-      final p = EqualEarth.project(lon.toDouble(), lat.toDouble());
-      lon == -180 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
-    }
-  }
-  for (var lon = -150; lon <= 150; lon += 30) {
-    for (var lat = -58; lat <= 84; lat += 2) {
-      final p = EqualEarth.project(lon.toDouble(), lat.toDouble());
-      lat == -58 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
-    }
-  }
-  return path;
-}();
-
 class WorldMap extends StatefulWidget {
   const WorldMap({
     super.key,
@@ -81,12 +86,13 @@ class WorldMap extends StatefulWidget {
     this.onTap,
     this.marks = const [],
     this.pulse,
+    this.pulseColor,
     this.view,
     this.padding = EdgeInsets.zero,
   });
 
-  /// Color of each map unit; null uses the land palette.
-  final Color Function(Country c)? fill;
+  /// Color of each map unit; null uses the plain land color.
+  final Color? Function(Country c)? fill;
 
   /// Tap position, and the country under it (with some slack for dots of tiny countries).
   final void Function(double lon, double lat, Country? hit)? onTap;
@@ -94,6 +100,7 @@ class WorldMap extends StatefulWidget {
 
   /// A country to circle with a pulsing ring (so Malta shows up on a world map).
   final Country? pulse;
+  final Color? pulseColor;
 
   /// First view (lon/lat box); the whole world when null.
   final Rect? view;
@@ -107,8 +114,8 @@ class WorldMap extends StatefulWidget {
 
 class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
   final _transform = TransformationController();
-  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
-  late final _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+  late final _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 750));
   Animation<Matrix4>? _moveTween;
   _Frame? _frame;
 
@@ -182,7 +189,7 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final palette = MapPalette.of(context);
     return LayoutBuilder(
       builder: (context, box) {
         final first = _frame == null;
@@ -191,7 +198,7 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
           WidgetsBinding.instance.addPostFrameCallback((_) => focus(widget.view!, animate: false));
         }
         return ColoredBox(
-          color: oceanColor(brightness),
+          color: palette.ocean,
           child: InteractiveViewer(
             transformationController: _transform,
             maxScale: 60,
@@ -209,10 +216,11 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
                   frame: _frame!,
                   transform: _transform,
                   pulse: _pulse,
-                  brightness: brightness,
+                  palette: palette,
                   fill: widget.fill,
                   marks: widget.marks,
                   pulseCountry: widget.pulse,
+                  pulseColor: widget.pulseColor ?? palette.ink,
                 ),
               ),
             ),
@@ -228,23 +236,26 @@ class _MapPainter extends CustomPainter {
     required this.frame,
     required this.transform,
     required this.pulse,
-    required this.brightness,
+    required this.palette,
     required this.fill,
     required this.marks,
     required this.pulseCountry,
+    required this.pulseColor,
   }) : super(repaint: Listenable.merge([transform, pulse]));
 
   final _Frame frame;
   final TransformationController transform;
   final Animation<double> pulse;
-  final Brightness brightness;
-  final Color Function(Country c)? fill;
+  final MapPalette palette;
+  final Color? Function(Country c)? fill;
   final List<MapMark> marks;
   final Country? pulseCountry;
+  final Color pulseColor;
+
+  Color _colorOf(Country c) => fill?.call(c) ?? (c.quiz ? palette.land : palette.territory);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dark = brightness == Brightness.dark;
     final zoom = transform.value.getMaxScaleOnAxis();
     // One screen pixel, in projected units.
     final px = 1 / (frame.k * zoom);
@@ -253,53 +264,49 @@ class _MapPainter extends CustomPainter {
     canvas.scale(frame.k);
     canvas.translate(-EqualEarth.world.left, -EqualEarth.world.top);
 
-    canvas.drawPath(
-      _graticule,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = px
-        ..color = (dark ? Colors.white : const Color(0xFF1F4E8C)).withValues(alpha: 0.12),
-    );
+    // Hairline borders, a touch heavier when zoomed in.
     final border = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(0.7, math.min(1.4, zoom / 3)) * px
+      ..strokeWidth = (zoom < 3 ? 0.6 : 0.9) * px
       ..strokeJoin = StrokeJoin.round
-      ..color = dark ? const Color(0xFF0B1338) : Colors.white;
+      ..color = palette.border;
     final paint = Paint();
     final world = World.instance;
     for (final c in world.units) {
-      paint.color = fill?.call(c) ?? (c.quiz ? landColor(c, brightness) : _territory(dark));
+      paint.color = _colorOf(c);
       final path = countryPath(c);
       canvas.drawPath(path, paint);
       canvas.drawPath(path, border);
     }
     // Tiny countries get a dot that stays the same size on screen.
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = px
+      ..color = palette.border;
     for (final c in world.countries.where((c) => c.tiny)) {
       final p = EqualEarth.project(c.lon, c.lat);
-      final color = fill?.call(c) ?? landColor(c, brightness);
-      canvas.drawCircle(p, 4.5 * px, Paint()..color = border.color);
-      canvas.drawCircle(p, 3.2 * px, Paint()..color = color);
+      canvas.drawCircle(p, 3.4 * px, paint..color = _colorOf(c));
+      canvas.drawCircle(p, 3.4 * px, ring);
     }
 
     final target = pulseCountry;
     if (target != null) {
       final p = EqualEarth.project(target.lon, target.lat);
-      final t = pulse.value;
+      final t = Curves.easeOut.transform(pulse.value);
       canvas.drawCircle(
         p,
-        (14 + 30 * t) * px,
+        (8 + 30 * t) * px,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3 * px
-          ..color = (dark ? Colors.white : const Color(0xFF1A1446)).withValues(alpha: 1 - t),
+          ..strokeWidth = 2 * px
+          ..color = pulseColor.withValues(alpha: (1 - t) * 0.9),
       );
     }
 
     for (final m in marks) {
       final a = EqualEarth.project(m.lon, m.lat);
       if (m.toLon != null) {
-        final b = EqualEarth.project(m.toLon!, m.toLat!);
-        _dashed(canvas, a, b, px, m.color);
+        _dashed(canvas, a, EqualEarth.project(m.toLon!, m.toLat!), px, m.color);
       } else {
         _pin(canvas, a, px, m.color);
       }
@@ -307,14 +314,12 @@ class _MapPainter extends CustomPainter {
     canvas.restore();
   }
 
-  static Color _territory(bool dark) => dark ? const Color(0xFF3A3F66) : const Color(0xFFDCD8E8);
-
   void _dashed(Canvas canvas, Offset a, Offset b, double px, Color color) {
     final paint = Paint()
-      ..strokeWidth = 2.5 * px
+      ..strokeWidth = 2 * px
       ..strokeCap = StrokeCap.round
-      ..color = color;
-    final len = (b - a).distance, dash = 8 * px;
+      ..color = color.withValues(alpha: 0.75);
+    final len = (b - a).distance, dash = 6 * px;
     if (len == 0) return;
     final dir = (b - a) / len;
     for (var d = 0.0; d < len; d += dash * 2) {
@@ -322,23 +327,24 @@ class _MapPainter extends CustomPainter {
     }
   }
 
+  /// A dot marker: white ring, colored core, a tight shadow to lift it off the map.
   void _pin(Canvas canvas, Offset p, double px, Color color) {
-    final head = p - Offset(0, 22 * px);
-    final body = Path()
-      ..moveTo(p.dx, p.dy)
-      ..lineTo(head.dx - 7 * px, head.dy + 5 * px)
-      ..arcToPoint(head.translate(7 * px, 5 * px), radius: Radius.circular(9 * px), largeArc: true)
-      ..close();
-    canvas.drawPath(body.shift(Offset(px, 1.5 * px)), Paint()..color = Colors.black26);
-    canvas.drawPath(body, Paint()..color = color);
-    canvas.drawCircle(head, 3.4 * px, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      p.translate(0, px),
+      10 * px,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.22)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2 * px),
+    );
+    canvas.drawCircle(p, 10 * px, Paint()..color = Colors.white);
+    canvas.drawCircle(p, 6.5 * px, Paint()..color = color);
   }
 
   @override
   bool shouldRepaint(_MapPainter old) =>
       old.fill != fill ||
       old.marks != marks ||
-      old.brightness != brightness ||
+      old.palette != palette ||
       old.pulseCountry != pulseCountry ||
       old.frame.size != frame.size;
 }
@@ -361,49 +367,37 @@ Path shapePath(Country c) => _shapes.putIfAbsent(c.id, () {
   return path;
 });
 
-/// A country's silhouette, filled with a gradient and a soft glow.
+/// A country's silhouette, flat.
 class ShapeView extends StatelessWidget {
-  const ShapeView(this.country, {super.key, this.colors = const [Colors.white, Colors.white], this.glow = true});
+  const ShapeView(this.country, {super.key, required this.color});
 
   final Country country;
-  final List<Color> colors;
-  final bool glow;
+  final Color color;
 
   @override
   Widget build(BuildContext context) =>
-      CustomPaint(painter: _ShapePainter(country, colors, glow), child: const SizedBox.expand());
+      CustomPaint(painter: _ShapePainter(country, color), child: const SizedBox.expand());
 }
 
 class _ShapePainter extends CustomPainter {
-  _ShapePainter(this.country, this.colors, this.glow);
+  _ShapePainter(this.country, this.color);
 
   final Country country;
-  final List<Color> colors;
-  final bool glow;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
     final src = shapePath(country);
     final b = src.getBounds();
-    if (b.isEmpty && b.width == 0) return;
-    final s = math.min(size.width / math.max(b.width, 1e-6), size.height / math.max(b.height, 1e-6)) * 0.88;
+    if (b.width == 0 && b.height == 0) return;
+    final s = math.min(size.width / math.max(b.width, 1e-6), size.height / math.max(b.height, 1e-6)) * 0.9;
     final m = Matrix4.identity()
       ..translateByDouble(size.width / 2, size.height / 2, 0, 1)
       ..scaleByDouble(s, s, 1, 1)
       ..translateByDouble(-b.center.dx, -b.center.dy, 0, 1);
-    final path = src.transform(m.storage);
-    final rect = path.getBounds();
-    if (glow) {
-      canvas.drawPath(
-        path.shift(const Offset(0, 6)),
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.25)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-      );
-    }
-    canvas.drawPath(path, Paint()..shader = LinearGradient(colors: colors).createShader(rect));
+    canvas.drawPath(src.transform(m.storage), Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(_ShapePainter old) => old.country != country || old.colors != colors;
+  bool shouldRepaint(_ShapePainter old) => old.country != country || old.color != color;
 }

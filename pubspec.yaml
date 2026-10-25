@@ -2,7 +2,7 @@ name: pangea
 description: "A geography game: flags, capitals, shapes, the map, and a daily mystery country."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.5
@@ -22,7 +22,16 @@ flutter:
   assets:
     - assets/world.json
   fonts:
-    # Lilita One, SIL Open Font License (assets/fonts/OFL.txt). Titles and numbers only.
-    - family: Lilita
+    # Plus Jakarta Sans, SIL Open Font License (assets/fonts/OFL.txt). Static weights: Flutter doesn't map
+    # FontWeight onto a variable font's axis.
+    - family: Jakarta
       fonts:
-        - asset: assets/fonts/LilitaOne-Regular.ttf
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800

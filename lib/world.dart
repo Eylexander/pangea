@@ -10,17 +10,17 @@ final bool fr = PlatformDispatcher.instance.locale.languageCode == 'fr';
 String tr(String en, String french) => fr ? french : en;
 
 enum Region {
-  africa('Africa', 'Africa', 'Afrique', '🌍', Rect.fromLTRB(-20, -36, 55, 38)),
-  americas('Americas', 'Americas', 'Amériques', '🌎', Rect.fromLTRB(-170, -56, -30, 72)),
-  asia('Asia', 'Asia', 'Asie', '🌏', Rect.fromLTRB(25, -11, 150, 56)),
-  europe('Europe', 'Europe', 'Europe', '🏰', Rect.fromLTRB(-12, 35, 32, 62)),
-  oceania('Oceania', 'Oceania', 'Océanie', '🏝️', Rect.fromLTRB(110, -48, 180, 10));
+  africa('Africa', 'Africa', 'Afrique', Rect.fromLTRB(-20, -36, 55, 38)),
+  americas('Americas', 'Americas', 'Amériques', Rect.fromLTRB(-170, -56, -30, 72)),
+  asia('Asia', 'Asia', 'Asie', Rect.fromLTRB(25, -11, 150, 56)),
+  europe('Europe', 'Europe', 'Europe', Rect.fromLTRB(-12, 35, 32, 62)),
+  oceania('Oceania', 'Oceania', 'Océanie', Rect.fromLTRB(110, -48, 180, 10));
 
-  const Region(this.key, this.en, this.french, this.emoji, this.view);
+  const Region(this.key, this.en, this.french, this.view);
 
   /// Natural Earth's REGION_UN value.
   final String key;
-  final String en, french, emoji;
+  final String en, french;
 
   /// What the map shows first for this region (lon/lat).
   final Rect view;
@@ -53,7 +53,7 @@ class Country {
         for (final poly in j['p'] as List) [for (final ring in poly as List) _decode(ring as List)],
       ] {
     var (w, s, e, n) = (180.0, 90.0, -180.0, -90.0);
-    for (final poly in polygons) {
+    for (final (k, poly) in polygons.indexed) {
       final r = poly.first;
       for (var i = 0; i < r.length; i += 2) {
         w = math.min(w, r[i]);
@@ -61,9 +61,15 @@ class Country {
         s = math.min(s, r[i + 1]);
         n = math.max(n, r[i + 1]);
       }
+      if (k == mainCount - 1) mainBounds = Rect.fromLTRB(w, s, e, n);
     }
     bounds = Rect.fromLTRB(w, s, e, n);
   }
+
+  /// Where to zoom to show the country: its main land, or around its label point when that spans the
+  /// antimeridian (Russia, Fiji).
+  Rect get view =>
+      mainBounds.width < 90 ? mainBounds : Rect.fromCenter(center: Offset(lon, lat), width: 40, height: 24);
 
   final String id, iso, en, french, capitalEn, capitalFr;
   final bool quiz;
@@ -75,6 +81,7 @@ class Country {
   /// Polygons, each a list of rings (outer first, then holes) as [lon, lat, lon, lat, ...] in degrees.
   final List<List<Float32List>> polygons;
   late final Rect bounds;
+  late final Rect mainBounds;
 
   String get name => tr(en, french);
   String get otherName => tr(french, en);

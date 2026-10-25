@@ -18,9 +18,10 @@ int warmth(Country guess, Country target) =>
 /// warm, so the percentage alone doesn't tell neighbors apart.
 Color heat(double km) {
   final t = (1 - math.log(math.max(km, 100) / 100) / math.log(100)).clamp(0.0, 1.0); // 100 km → 1, 10000 km → 0
+  // Deep enough tones to read as text on a light tint.
   return t < 0.5
-      ? Color.lerp(const Color(0xFF5B8CFF), const Color(0xFFFFB020), t * 2)!
-      : Color.lerp(const Color(0xFFFFB020), const Color(0xFFFF3D3D), t * 2 - 1)!;
+      ? Color.lerp(const Color(0xFF3B74E8), const Color(0xFFE38A00), t * 2)!
+      : Color.lerp(const Color(0xFFE38A00), const Color(0xFFE5484D), t * 2 - 1)!;
 }
 
 String arrowEmoji(double bearing) =>
@@ -66,7 +67,6 @@ class _GuessPageState extends State<GuessPage> {
   void initState() {
     super.initState();
     _input.addListener(() => setState(() {}));
-    _focus.addListener(() => setState(() {}));
     final day = widget.day;
     if (day != null) {
       _target = Store.dailyCountry(day);
@@ -131,7 +131,8 @@ class _GuessPageState extends State<GuessPage> {
         ? const <Country>[]
         : World.instance.search(query, limit: 12).where((c) => !_guesses.contains(c)).take(5).toList();
     final misses = _guesses.where((g) => g != _target).length;
-    final typing = _focus.hasFocus && !_over;
+    final typing = !_over && MediaQuery.viewInsetsOf(context).bottom > 0; // keyboard up
+    const accent = Color(0xFFE5438A);
 
     return Scaffold(
       body: SafeArea(
@@ -140,80 +141,81 @@ class _GuessPageState extends State<GuessPage> {
             Column(
               children: [
                 GameBar(
-                  mode: Mode.daily,
-                  title: day == null ? tr('Free play', 'Partie libre') : '${Mode.daily.title} #$day',
-                  trailing: day == null ? null : Pill('🔥 ${Store.instance.streak}'),
+                  title: day == null ? tr('Free play', 'Partie libre') : Mode.daily.title,
+                  subtitle: day == null ? Mode.daily.title : '${tr('Daily', 'Du jour')} · #$day',
+                  trailing: day == null
+                      ? null
+                      : Pill('${Store.instance.streak}', icon: Icons.local_fire_department_rounded),
                 ),
                 Expanded(
                   child: ListView(
                     controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
                     children: [
                       Shake(
                         trigger: _shake,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           // Smaller while typing, so the guesses so far stay in view above the keyboard.
-                          height: typing ? 130 : 230,
-                          decoration: BoxDecoration(
-                            gradient: Mode.daily.gradient,
-                            borderRadius: BorderRadius.circular(32),
-                          ),
+                          height: typing ? 130 : 220,
+                          decoration: panel(context, radius: 28),
                           child: Stack(
                             children: [
                               Positioned.fill(
-                                child: Padding(padding: const EdgeInsets.all(22), child: ShapeView(_target)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(26),
+                                  child: ShapeView(_target, color: accent),
+                                ),
                               ),
                               if (misses >= 3 || _over)
                                 Positioned(
-                                  left: 14,
-                                  bottom: 14,
+                                  left: 12,
+                                  bottom: 12,
                                   child: Pill(
-                                    '${tr('Hint: ', 'Indice : ')}${_target.region?.emoji} ${_target.region?.label}',
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    textColor: Colors.black87,
+                                    '${tr('Hint: ', 'Indice : ')}${_target.region?.label}',
+                                    icon: Icons.lightbulb_rounded,
+                                    color: tint(context, accent, 0.14),
+                                    textColor: accent,
                                   ),
                                 ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       for (var i = 0; i < (typing ? _guesses.length : maxGuesses); i++)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: i < _guesses.length ? _GuessRow(_guesses[i], _target) : _EmptyRow(i + 1),
                         ),
-                      if (_over) ...[const SizedBox(height: 8), _ending(context)],
+                      if (_over) ...[const SizedBox(height: 6), _ending(context)],
                     ],
                   ),
                 ),
                 if (suggestions.isNotEmpty)
                   SizedBox(
-                    height: 48,
+                    height: 46,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         for (final c in suggestions)
                           Padding(
-                            padding: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.only(right: 6),
                             child: Bouncy(
                               onTap: () => _submit(c),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14),
                                 alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  gradient: c == suggestions.first ? Mode.daily.gradient : null,
-                                  color: cs.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
+                                decoration: c == suggestions.first
+                                    ? BoxDecoration(color: accent, borderRadius: BorderRadius.circular(99))
+                                    : panel(context, radius: 99),
                                 child: Text(
                                   '${c.flag}  ${c.name}',
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                    color: c == suggestions.first ? Colors.white : null,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                    color: c == suggestions.first ? Colors.white : cs.onSurface,
                                   ),
                                 ),
                               ),
@@ -224,7 +226,7 @@ class _GuessPageState extends State<GuessPage> {
                   ),
                 if (!_over)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
                     child: TextField(
                       controller: _input,
                       focusNode: _focus,
@@ -236,19 +238,15 @@ class _GuessPageState extends State<GuessPage> {
                         if (suggestions.isNotEmpty) _submit(suggestions.first);
                         _focus.requestFocus();
                       },
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                      decoration: InputDecoration(
-                        hintText: tr(
-                          'Guess ${_guesses.length + 1} of $maxGuesses: a country…',
-                          'Essai ${_guesses.length + 1} sur $maxGuesses : un pays…',
+                      style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600),
+                      decoration: fieldDecoration(
+                        context,
+                        tr(
+                          'Guess ${_guesses.length + 1} of $maxGuesses: a country',
+                          'Essai ${_guesses.length + 1} sur $maxGuesses : un pays',
                         ),
-                        prefixIcon: const Icon(Icons.travel_explore_rounded),
-                        filled: true,
-                        fillColor: cs.surfaceContainerHighest,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(22),
-                          borderSide: BorderSide.none,
-                        ),
+                        Icons.search_rounded,
+                        accent: accent,
                       ),
                     ),
                   ),
@@ -264,52 +262,63 @@ class _GuessPageState extends State<GuessPage> {
   Widget _ending(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final day = widget.day;
+    final store = Store.instance;
+    Widget stat(String value, String label) => Expanded(
+      child: Column(
+        children: [
+          Text(value, style: display(22)),
+          Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(28)),
+      decoration: panel(context, radius: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _won
-                ? tr('Found in ${_guesses.length}!', 'Trouvé en ${_guesses.length} !')
-                : tr('So close… it was', 'Raté… c\'était'),
+            _won ? tr('Found in ${_guesses.length}', 'Trouvé en ${_guesses.length}') : tr('It was', 'C\'était'),
             textAlign: TextAlign.center,
-            style: display(24),
+            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 14),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Bouncy(
             onTap: () => showCountry(context, _target),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(_target.flag, style: const TextStyle(fontSize: 44)),
-                const SizedBox(width: 12),
-                Flexible(child: Text(_target.name, style: display(32))),
-                const Icon(Icons.chevron_right_rounded),
+                Text(_target.flag, style: const TextStyle(fontSize: 36)),
+                const SizedBox(width: 10),
+                Flexible(child: Text(_target.name, style: display(26))),
+                Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
               ],
             ),
           ),
           if (day != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              tr(
-                'Streak ${Store.instance.streak} 🔥 · best ${Store.instance.bestStreak} · ${Store.instance.dailyWon}/${Store.instance.dailyPlayed} won',
-                'Série ${Store.instance.streak} 🔥 · record ${Store.instance.bestStreak} · ${Store.instance.dailyWon}/${Store.instance.dailyPlayed} gagnés',
-              ),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: cs.outlineVariant),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                stat('${store.streak}', tr('Streak', 'Série')),
+                stat('${store.bestStreak}', tr('Best', 'Record')),
+                stat('${store.dailyWon}/${store.dailyPlayed}', tr('Won', 'Gagnés')),
+              ],
             ),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Row(
             children: [
               if (day != null) ...[
                 Expanded(
                   child: BigButton(
                     tr('Share', 'Partager'),
-                    icon: Icons.copy_rounded,
-                    colors: Mode.daily.colors,
+                    icon: Icons.ios_share_rounded,
+                    color: Mode.daily.color,
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: shareText(day, _guesses, _target)));
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -324,7 +333,7 @@ class _GuessPageState extends State<GuessPage> {
                 child: BigButton(
                   tr('Free play', 'Partie libre'),
                   icon: Icons.shuffle_rounded,
-                  colors: day == null ? Mode.daily.colors : Mode.shapes.colors,
+                  color: cs.onSurface,
                   onTap: () => day == null
                       ? setState(_newGame)
                       : Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GuessPage())),
@@ -348,52 +357,53 @@ class _GuessRow extends StatelessWidget {
     final right = guess == target;
     final km = haversineKm(guess.lat, guess.lon, target.lat, target.lon);
     final w = warmth(guess, target);
-    final color = heat(km);
+    final color = right ? good : heat(km);
     return TweenAnimationBuilder(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutBack,
-      builder: (context, t, child) => Transform.scale(
-        scale: 0.8 + 0.2 * t,
-        child: Opacity(opacity: t.clamp(0, 1), child: child),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 8 * (1 - t)), child: child),
       ),
       child: Container(
         height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: right ? good : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(18),
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
+        decoration: right
+            ? panel(context, radius: 16, color: tint(context, good, 0.12), border: good)
+            : panel(context, radius: 16),
         child: Row(
           children: [
-            Text(guess.flag, style: const TextStyle(fontSize: 24)),
+            Text(guess.flag, style: const TextStyle(fontSize: 22)),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 guess.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: right ? Colors.white : null),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: right ? good : null),
               ),
             ),
             if (!right) ...[
               Text(
                 fmtKm(km),
-                style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurfaceVariant),
+                style: display(13.5, color: cs.onSurfaceVariant, weight: FontWeight.w600),
               ),
               const SizedBox(width: 8),
               Transform.rotate(
                 angle: bearing(guess.lat, guess.lon, target.lat, target.lon) * math.pi / 180,
-                child: Icon(Icons.arrow_upward_rounded, color: color, size: 24),
+                child: Icon(Icons.arrow_upward_rounded, color: color, size: 20),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
             ],
             Container(
-              width: 56,
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              decoration: BoxDecoration(color: right ? Colors.white : color, borderRadius: BorderRadius.circular(12)),
+              width: 54,
+              height: 38,
+              decoration: BoxDecoration(color: tint(context, color, 0.16), borderRadius: BorderRadius.circular(11)),
               alignment: Alignment.center,
-              child: Text(right ? '🎉' : '$w%', style: display(16, color: right ? null : Colors.white)),
+              child: right
+                  ? const Icon(Icons.check_rounded, color: good)
+                  : Text('$w%', style: display(14, color: color)),
             ),
           ],
         ),
@@ -412,11 +422,14 @@ class _EmptyRow extends StatelessWidget {
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        border: Border.all(color: cs.outlineVariant, width: 2),
-        borderRadius: BorderRadius.circular(18),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
       ),
       alignment: Alignment.center,
-      child: Text('$n', style: display(18, color: cs.outlineVariant)),
+      child: Text(
+        '$n',
+        style: display(15, color: cs.onSurfaceVariant.withValues(alpha: 0.6), weight: FontWeight.w700),
+      ),
     );
   }
 }

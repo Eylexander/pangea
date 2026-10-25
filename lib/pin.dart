@@ -61,10 +61,7 @@ class _PinPageState extends State<PinPage> {
       _done.add((c: _target, km: km, points: points));
     });
     // Show both the pin and the answer.
-    final t = _target.bounds.width < 90
-        ? _target.bounds
-        : Rect.fromCenter(center: Offset(_target.lon, _target.lat), width: 20, height: 20);
-    final box = t.expandToInclude(Rect.fromCenter(center: Offset(lon, lat), width: 0, height: 0));
+    final box = _target.view.expandToInclude(Rect.fromCenter(center: Offset(lon, lat), width: 0, height: 0));
     final margin = math.max(4.0, math.max(box.width, box.height) * 0.25);
     _map.currentState?.focus(box.inflate(margin));
   }
@@ -88,7 +85,7 @@ class _PinPageState extends State<PinPage> {
         body: SafeArea(
           child: Column(
             children: [
-              GameBar(mode: Mode.pin, title: '${Mode.pin.title} · $where'),
+              GameBar(title: '${Mode.pin.title} · $where'),
               Expanded(
                 child: Results(
                   mode: Mode.pin,
@@ -115,6 +112,7 @@ class _PinPageState extends State<PinPage> {
 
     final last = _revealed ? _done.last : null;
     final pin = _pin;
+    final palette = MapPalette.of(context);
     return Scaffold(
       body: Stack(
         children: [
@@ -122,14 +120,13 @@ class _PinPageState extends State<PinPage> {
             child: WorldMap(
               key: _map,
               view: _view,
-              padding: const EdgeInsets.only(top: 170, bottom: 150, left: 16, right: 16),
-              fill: _revealed
-                  ? (c) => c == _target ? good : landColor(c, Theme.of(context).brightness).withValues(alpha: 0.45)
-                  : null,
+              padding: const EdgeInsets.only(top: 190, bottom: 120, left: 16, right: 16),
+              fill: _revealed ? (c) => c == _target ? good : null : null,
               pulse: _revealed ? _target : null,
+              pulseColor: good,
               marks: [
-                if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, cs.onSurface),
-                if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.colors.first),
+                if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, palette.ink),
+                if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.color),
               ],
               onTap: _revealed
                   ? null
@@ -144,33 +141,59 @@ class _PinPageState extends State<PinPage> {
               children: [
                 Container(
                   margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                  decoration: BoxDecoration(
-                    color: cs.surface.withValues(alpha: 0.94),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6))],
-                  ),
+                  decoration: floating(context),
                   child: Column(
                     children: [
                       GameBar(
-                        mode: Mode.pin,
-                        title: '${_done.length + (_revealed ? 0 : 1)}/$rounds',
-                        trailing: Text(fmtInt(_score), style: display(24)),
+                        title: '${Mode.pin.title} · $where',
+                        trailing: Text(fmtInt(_score), style: display(22)),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
                         child: Row(
                           children: [
-                            Text(_target.flag, style: const TextStyle(fontSize: 40)),
+                            Text(_target.flag, style: const TextStyle(fontSize: 36)),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(tr('Where is', 'Où se trouve'), style: TextStyle(color: cs.onSurfaceVariant)),
-                                  Text(_target.name, style: display(28), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    tr('Where is', 'Où se trouve'),
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(_target.name, style: display(24), maxLines: 2, overflow: TextOverflow.ellipsis),
                                 ],
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      // One segment per round: green when spot on, blue when scored, gray when to come.
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < rounds; i++)
+                              Expanded(
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  height: 5,
+                                  margin: EdgeInsets.only(right: i < rounds - 1 ? 4 : 0),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(99),
+                                    color: i < _done.length
+                                        ? (_done[i].km <= 50 ? good : Mode.pin.color)
+                                        : i == _done.length
+                                        ? cs.onSurface.withValues(alpha: 0.35)
+                                        : cs.surfaceContainerHighest,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -179,15 +202,15 @@ class _PinPageState extends State<PinPage> {
                 ),
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 250),
                     child: last == null
                         ? BigButton(
                             key: const ValueKey('confirm'),
                             pin == null ? tr('Tap the map', 'Touche la carte') : tr('Confirm', 'Valider'),
                             icon: pin == null ? Icons.touch_app_rounded : Icons.check_rounded,
-                            colors: Mode.pin.colors,
+                            color: Mode.pin.color,
                             onTap: pin == null ? null : _confirm,
                           )
                         : _Verdict(key: ValueKey(_done.length), km: last.km, points: last.points, onNext: _continue),
@@ -211,39 +234,40 @@ class _Verdict extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final (emoji, text) = km <= 50
-        ? ('🎯', tr('Spot on!', 'En plein dedans !'))
+    final (icon, color, text) = km <= 50
+        ? (Icons.gps_fixed_rounded, good, tr('Spot on', 'En plein dedans'))
         : km < 500
-        ? ('🔥', tr('So close', 'Tout près'))
+        ? (Icons.near_me_rounded, const Color(0xFFF29D0C), tr('So close', 'Tout près'))
         : km < 1500
-        ? ('🙂', tr('Not bad', 'Pas mal'))
-        : ('🧊', tr('Far away', 'Bien loin'));
+        ? (Icons.explore_rounded, Mode.pin.color, tr('Not bad', 'Pas mal'))
+        : (Icons.ac_unit_rounded, const Color(0xFF6B7A99), tr('Far away', 'Bien loin'));
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6))],
-      ),
+      padding: const EdgeInsets.all(12),
+      decoration: floating(context),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 40)),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: tint(context, color, 0.16), borderRadius: BorderRadius.circular(16)),
+            child: Icon(icon, color: color),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: display(22)),
+                Text(text, style: display(19)),
                 Text(
                   km <= 50 ? '+${fmtInt(points)}' : '${fmtKm(km)} · +${fmtInt(points)}',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
           ),
           SizedBox(
-            width: 130,
-            child: BigButton(tr('Next', 'Suivant'), colors: Mode.pin.colors, onTap: onNext),
+            width: 120,
+            child: BigButton(tr('Next', 'Suivant'), color: Mode.pin.color, onTap: onNext),
           ),
         ],
       ),

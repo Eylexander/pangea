@@ -13,7 +13,7 @@ French (follows the phone's language), offline, no ads, no account.
 - Every game can be played on the whole world or one continent.
 
 197 countries: the UN members plus Vatican, Palestine, Kosovo and Taiwan. Borders from
-[Natural Earth](https://www.naturalearthdata.com/) (public domain), title font Lilita One (SIL OFL).
+[Natural Earth](https://www.naturalearthdata.com/) (public domain), font Plus Jakarta Sans (SIL OFL).
 
 Distributed through the F-Droid repository https://eylexander.github.io/fdroid/repo. Technical notes:
 [CLAUDE.md](CLAUDE.md).

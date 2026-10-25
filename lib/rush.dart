@@ -128,18 +128,18 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
         child: Column(
           children: [
             GameBar(
-              mode: mode,
-              title: '${mode.title} · $where',
-              trailing: _over ? null : _ScoreBadge(score: _score, multiplier: _multiplier, colors: mode.colors),
+              title: mode.title,
+              subtitle: where,
+              trailing: _over ? null : _ScoreBadge(score: _score, multiplier: _multiplier, color: mode.color),
             ),
             Expanded(
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
+                duration: const Duration(milliseconds: 300),
                 child: _over
                     ? Results(
                         key: const ValueKey('results'),
                         mode: mode,
-                        title: tr("Time's up!", 'Temps écoulé !'),
+                        title: tr("Time's up", 'Temps écoulé'),
                         score: _score,
                         record: _record,
                         best: Store.instance.best(mode.name, widget.region),
@@ -160,47 +160,42 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
   }
 
   Widget _question(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Padding(
       key: const ValueKey('play'),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
       child: Column(
         children: [
-          AnimatedBuilder(animation: _clock, builder: (context, _) => _TimeBar(1 - _clock.value)),
+          AnimatedBuilder(
+            animation: _clock,
+            builder: (context, _) => _TimeBar(1 - _clock.value, color: mode.color),
+          ),
           const SizedBox(height: 16),
           Expanded(
             child: Shake(
               trigger: _shake,
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                transitionBuilder: (child, a) => ScaleTransition(
-                  scale: Tween(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
-                  child: FadeTransition(opacity: a, child: child),
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, a) => FadeTransition(
+                  opacity: a,
+                  child: ScaleTransition(
+                    scale: Tween(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+                    child: child,
+                  ),
                 ),
                 child: Container(
                   key: ValueKey(_target.id + _recent.length.toString()),
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: mode.gradient,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: mode.colors.last.withValues(alpha: 0.35),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: _prompt(),
+                  decoration: panel(context, radius: 28),
+                  padding: const EdgeInsets.all(24),
+                  child: _prompt(context),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           for (final o in _options)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 8),
               child: _Option(
                 label: mode == Mode.capitals ? o.capital : o.name,
                 state: _picked == null
@@ -211,7 +206,6 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
                     ? _OptionState.wrong
                     : _OptionState.dim,
                 onTap: () => _answer(o),
-                surface: cs.surfaceContainerHighest,
               ),
             ),
         ],
@@ -219,34 +213,36 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _prompt() {
-    const white = Colors.white;
+  Widget _prompt(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     switch (mode) {
       case Mode.flags:
         // Emoji flags are bitmaps: past ~120 they only get blurrier.
         return Center(
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(_target.flag, style: const TextStyle(fontSize: 120)),
+            child: Text(_target.flag, style: const TextStyle(fontSize: 116)),
           ),
         );
       case Mode.shapes:
-        return ShapeView(_target);
+        return Padding(
+          padding: const EdgeInsets.all(8),
+          child: ShapeView(_target, color: mode.color),
+        );
       default:
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(tr('Capital of', 'Capitale de'), style: display(20, color: white.withValues(alpha: 0.85))),
-            const SizedBox(height: 8),
-            Flexible(
-              child: FittedBox(child: Text(_target.flag, style: const TextStyle(fontSize: 72))),
-            ),
-            const SizedBox(height: 8),
             Text(
-              _target.name,
-              textAlign: TextAlign.center,
-              style: display(36, color: white),
+              tr('Capital of', 'Capitale de'),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600),
             ),
+            const SizedBox(height: 14),
+            Flexible(
+              child: FittedBox(child: Text(_target.flag, style: const TextStyle(fontSize: 64))),
+            ),
+            const SizedBox(height: 12),
+            Text(_target.name, textAlign: TextAlign.center, style: display(30)),
           ],
         );
     }
@@ -254,63 +250,73 @@ class _RushPageState extends State<RushPage> with SingleTickerProviderStateMixin
 }
 
 class _ScoreBadge extends StatelessWidget {
-  const _ScoreBadge({required this.score, required this.multiplier, required this.colors});
+  const _ScoreBadge({required this.score, required this.multiplier, required this.color});
   final int score, multiplier;
-  final List<Color> colors;
+  final Color color;
 
   @override
   Widget build(BuildContext context) => Row(
     children: [
       AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 200),
         transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
         child: multiplier > 1
             ? Container(
                 key: ValueKey(multiplier),
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: colors),
-                  borderRadius: BorderRadius.circular(99),
+                margin: const EdgeInsets.only(right: 10),
+                padding: const EdgeInsets.fromLTRB(6, 3, 9, 3),
+                decoration: BoxDecoration(color: tint(context, color, 0.16), borderRadius: BorderRadius.circular(99)),
+                child: Row(
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 16, color: color),
+                    Text('x$multiplier', style: display(14, color: color)),
+                  ],
                 ),
-                child: Text('🔥 x$multiplier', style: display(16, color: Colors.white)),
               )
             : const SizedBox.shrink(),
       ),
       TweenAnimationBuilder(
         tween: IntTween(end: score),
         duration: const Duration(milliseconds: 300),
-        builder: (context, v, _) => Text(fmtInt(v), style: display(26)),
+        builder: (context, v, _) => Text(fmtInt(v), style: display(22)),
       ),
     ],
   );
 }
 
-/// Time left, from green to red.
+/// Time left: a thin bar in the game's color, red for the last quarter, and the seconds.
 class _TimeBar extends StatelessWidget {
-  const _TimeBar(this.left);
+  const _TimeBar(this.left, {required this.color});
   final double left;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final color = Color.lerp(
-      bad,
-      Color.lerp(const Color(0xFFFFC233), good, ((left - 0.5) * 2).clamp(0, 1)),
-      (left * 3).clamp(0, 1),
-    )!;
-    return Container(
-      height: 12,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      alignment: Alignment.centerLeft,
-      child: FractionallySizedBox(
-        widthFactor: left.clamp(0.0, 1.0),
-        child: Container(
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99)),
+    final cs = Theme.of(context).colorScheme;
+    final c = left < 0.25 ? bad : color;
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: left.clamp(0.0, 1.0),
+              minHeight: 6,
+              color: c,
+              backgroundColor: cs.surfaceContainerHighest,
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 34,
+          child: Text(
+            '${(left * _RushPageState.seconds).ceil()}s',
+            textAlign: TextAlign.end,
+            style: display(14, color: left < 0.25 ? bad : cs.onSurfaceVariant, weight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -318,42 +324,46 @@ class _TimeBar extends StatelessWidget {
 enum _OptionState { idle, right, wrong, dim }
 
 class _Option extends StatelessWidget {
-  const _Option({required this.label, required this.state, required this.onTap, required this.surface});
+  const _Option({required this.label, required this.state, required this.onTap});
   final String label;
   final _OptionState state;
   final VoidCallback onTap;
-  final Color surface;
 
   @override
   Widget build(BuildContext context) {
-    final (bg, fg) = switch (state) {
-      _OptionState.right => (good, Colors.white),
-      _OptionState.wrong => (bad, Colors.white),
-      _ => (surface, Theme.of(context).colorScheme.onSurface),
+    final cs = Theme.of(context).colorScheme;
+    final (bg, border, fg, icon) = switch (state) {
+      _OptionState.right => (tint(context, good, 0.14), good, good, Icons.check_circle_rounded),
+      _OptionState.wrong => (tint(context, bad, 0.14), bad, bad, Icons.cancel_rounded),
+      _ => (cs.surfaceContainerLowest, cs.outlineVariant, cs.onSurface, null),
     };
     return Bouncy(
       onTap: state == _OptionState.idle ? onTap : null,
       child: AnimatedOpacity(
-        opacity: state == _OptionState.dim ? 0.4 : 1,
-        duration: const Duration(milliseconds: 200),
+        opacity: state == _OptionState.dim ? 0.45 : 1,
+        duration: const Duration(milliseconds: 180),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          constraints: const BoxConstraints(minHeight: 58),
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(minHeight: 56),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: border, width: icon == null ? 1 : 1.5),
+          ),
           alignment: Alignment.center,
           child: Row(
             children: [
+              const SizedBox(width: 24),
               Expanded(
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg),
+                  style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: fg),
                 ),
               ),
-              if (state == _OptionState.right) const Icon(Icons.check_circle_rounded, color: Colors.white),
-              if (state == _OptionState.wrong) const Icon(Icons.cancel_rounded, color: Colors.white),
+              SizedBox(width: 24, child: icon == null ? null : Icon(icon, color: fg, size: 22)),
             ],
           ),
         ),

@@ -5,15 +5,10 @@ import 'store.dart';
 import 'ui.dart';
 import 'world.dart';
 
-/// A pale tint where the player hasn't found the country yet, full color once they have. Territories stay gray.
-Color knownFill(Country c, Brightness b, Set<String> known) {
-  final dark = b == Brightness.dark;
-  if (!c.quiz) return dark ? const Color(0xFF3A3F66) : const Color(0xFFDCD8E8);
-  if (known.contains(c.id)) return landColor(c, b);
-  return Color.lerp(landColor(c, b), dark ? const Color(0xFF1C2050) : Colors.white, 0.75)!;
-}
+/// Countries found in any game take their continent's color; the others stay plain land.
+Color? foundFill(Country c, Set<String> known) => known.contains(c.id) ? regionColor(c.region) : null;
 
-/// The world map to explore: tap a country to learn about it. Countries found in any game are in color.
+/// The world map to explore: tap a country to learn about it.
 class AtlasPage extends StatefulWidget {
   const AtlasPage({super.key});
 
@@ -42,7 +37,7 @@ class _AtlasPageState extends State<AtlasPage> {
       builder: (context) => const _SearchSheet(),
     );
     if (c == null || !mounted) return;
-    final b = c.bounds.width < 90 ? c.bounds : Rect.fromCenter(center: Offset(c.lon, c.lat), width: 40, height: 30);
+    final b = c.view;
     _map.currentState?.focus(b.inflate(b.longestSide * 0.3 + 1.5));
     _open(c);
   }
@@ -50,7 +45,7 @@ class _AtlasPageState extends State<AtlasPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final brightness = Theme.of(context).brightness;
+    final palette = MapPalette.of(context);
     final known = Store.instance.known;
     final pool = World.instance.inRegion(_region);
     final found = pool.where((c) => known.contains(c.id)).length;
@@ -61,8 +56,8 @@ class _AtlasPageState extends State<AtlasPage> {
             child: WorldMap(
               key: _map,
               view: _viewOf(_region),
-              padding: const EdgeInsets.only(top: 200, left: 12, right: 12, bottom: 24),
-              fill: (c) => c == _selected ? Mode.atlas.colors.first : knownFill(c, brightness, known),
+              padding: const EdgeInsets.only(top: 200, left: 12, right: 12, bottom: 70),
+              fill: (c) => c == _selected ? palette.ink : foundFill(c, known),
               pulse: _selected,
               onTap: (lon, lat, hit) {
                 if (hit != null) _open(hit);
@@ -76,59 +71,72 @@ class _AtlasPageState extends State<AtlasPage> {
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                 padding: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: cs.surface.withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6))],
-                ),
+                decoration: floating(context),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     GameBar(
-                      mode: Mode.atlas,
-                      trailing: IconButton.filledTonal(
-                        onPressed: _search,
-                        icon: const Icon(Icons.search_rounded),
+                      title: Mode.atlas.title,
+                      subtitle: tr(
+                        '$found of ${pool.length} countries found',
+                        '$found pays trouvés sur ${pool.length}',
+                      ),
+                      trailing: IconSquare(
+                        Icons.search_rounded,
+                        size: 44,
                         tooltip: tr('Find a country', 'Chercher un pays'),
+                        onTap: _search,
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Text('$found / ${pool.length}', style: display(22)),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  tr('countries found', 'pays trouvés'),
-                                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(99),
-                            child: LinearProgressIndicator(
-                              value: pool.isEmpty ? 0 : found / pool.length,
-                              minHeight: 10,
-                              color: Mode.atlas.colors.last,
-                              backgroundColor: cs.surfaceContainerHighest,
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.fromLTRB(18, 2, 18, 14),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          value: pool.isEmpty ? 0 : found / pool.length,
+                          minHeight: 6,
+                          color: _region == null ? cs.onSurface : regionColor(_region),
+                          backgroundColor: cs.surfaceContainerHighest,
+                        ),
                       ),
                     ),
                     RegionPicker(
                       value: _region,
+                      padding: 14,
                       onChanged: (r) {
                         setState(() => _region = r);
                         _map.currentState?.focus(_viewOf(r));
                       },
                     ),
                   ],
+                ),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: SafeArea(
+              child: Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: floating(context, radius: 99),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final r in Region.values) ...[
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(color: regionColor(r), shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(r.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        if (r != Region.values.last) const SizedBox(width: 12),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -152,6 +160,7 @@ class _SearchSheetState extends State<_SearchSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final known = Store.instance.known;
     final hits = _query.isEmpty
         ? (World.instance.countries.toList()..sort((a, b) => a.name.compareTo(b.name)))
         : World.instance.search(_query, limit: 30);
@@ -167,13 +176,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                 autofocus: true,
                 autocorrect: false,
                 onChanged: (q) => setState(() => _query = q),
-                decoration: InputDecoration(
-                  hintText: tr('Country name', 'Nom du pays'),
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  filled: true,
-                  fillColor: cs.surfaceContainerHighest,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
-                ),
+                decoration: fieldDecoration(context, tr('Country name', 'Nom du pays'), Icons.search_rounded),
               ),
             ),
             Expanded(
@@ -181,11 +184,11 @@ class _SearchSheetState extends State<_SearchSheet> {
                 children: [
                   for (final c in hits)
                     ListTile(
-                      leading: Text(c.flag, style: const TextStyle(fontSize: 28)),
-                      title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: Text(c.capital),
-                      trailing: Store.instance.known.contains(c.id)
-                          ? const Icon(Icons.check_circle, color: good)
+                      leading: Text(c.flag, style: const TextStyle(fontSize: 26)),
+                      title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text(c.capital, style: TextStyle(color: cs.onSurfaceVariant)),
+                      trailing: known.contains(c.id)
+                          ? Icon(Icons.check_circle_rounded, color: regionColor(c.region))
                           : null,
                       onTap: () => Navigator.pop(context, c),
                     ),

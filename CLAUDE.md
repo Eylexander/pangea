@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Pangea: a geography game for Android (Flutter only, no native code). Written for the user, who likes testing and
-learning geography; they asked for something fun with a vibrant UI. English or French, picked from the phone's
+learning geography; they asked for something fun with a vibrant UI, then (after v1.0.0) for a
+modern one: the first look (Lilita One, rainbow map, colored glows) was "fun but not modern". See Design. English or French, picked from the phone's
 language (`fr`/`tr()` in `lib/world.dart`). Offline, no network permission.
 
 ## Toolchain
@@ -51,9 +52,9 @@ python tool/build_world.py <dir>                             # regenerates asset
 | --- | --- |
 | `world.dart` | `Country` (decoding, point-in-polygon with holes, distance to border), `World` (load, search), `Region`, `EqualEarth` projection and its inverse, haversine/bearing, `tr()` |
 | `store.dart` | `Store` (SharedPreferences): records per game and region, "known" countries, misses per game (weights the picks), daily guesses and streak |
-| `map.dart` | `WorldMap` (InteractiveViewer + painter, animated `focus`, tap hit test with slack for tiny countries' dots, pins, dashed lines, pulse ring), `ShapeView` (silhouette) |
-| `ui.dart` | `Mode` (each game's emoji, names, gradient), `Bouncy`, `Shake`, `Confetti`, `Pill`, `RegionPicker`, `CountryCard`, `BigButton`, `Results`, number formats |
-| `main.dart` | Theme (seed violet, vibrant variant), home: daily card, region chips, mode tiles, Atlas tile |
+| `map.dart` | `MapPalette`, `regionColor`, `WorldMap` (InteractiveViewer + painter, animated `focus`, tap hit test with slack for tiny countries' dots, dot pins, dashed lines, pulse ring), `ShapeView` (flat silhouette) |
+| `ui.dart` | Design tokens and widgets: `Mode` (icon, names, accent), `display()`, `panel()`, `floating()`, `tint()`, `fieldDecoration()`, `Bouncy`, `Shake`, `Confetti`, `Pill`, `ModeBadge`, `RegionPicker`, `CountryCard`, `BigButton`, `IconSquare`, `Results`, `GameBar`, number formats |
+| `main.dart` | Theme (neutral surfaces, Plus Jakarta Sans), home: daily hero card, region chips, mode tiles, Atlas card |
 | `rush.dart` | Flags / Capitals / Shapes: 60 s, four choices from the same region, x1–x5 combo, −3 s per miss |
 | `pin.dart` | Ten countries on a blank map: 1000 points within 50 km, else `1000·e^(−km/800)` |
 | `guess.dart` | Mystery country (daily or free play): six guesses, km + arrow + warmth %, region hint after 3 misses, share text |
@@ -62,9 +63,25 @@ python tool/build_world.py <dir>                             # regenerates asset
 - The daily country is the same for everyone: day 1 = 2026-01-01 (local date), countries with an area ≥ 2000 km²
   shuffled once with `Random(2026)`. Changing that pool or seed changes every future day.
 - Flags are emoji (Noto Color Emoji on Android): no flag assets. They're bitmaps, so keep them ≤ ~120 px.
-- Colors: map land by Natural Earth's `MAPCOLOR7` (`landColor`), guess rows by distance on a log scale (`heat`;
-  inside Europe every guess is 90 %+ warm, so the percentage alone doesn't tell neighbors apart).
+- Guess rows are colored by distance on a log scale (`heat`; inside Europe every guess is 90 %+ warm, so the
+  percentage alone doesn't tell neighbors apart).
+- `Country.view` is where to zoom for a country: its main land (Portugal without the Azores).
 - Stacks with a full-screen map and a floating card: wrap the card in `Align`, or the Stack shrinks to the card.
+
+## Design (v1.1.0)
+
+- Font: Plus Jakarta Sans, static weights 400–800 (`assets/fonts/`, OFL). Titles and numbers go through `display()`:
+  ExtraBold, tight negative tracking, tabular figures. No display/cartoon font.
+- Surfaces are neutral (theme in `main.dart`): cards are `surfaceContainerLowest` with a hairline `outlineVariant`
+  border (`panel()`). No colored shadows or glows anywhere; only cards floating over a map get a soft neutral shadow
+  (`floating()`).
+- Each game has one accent (`Mode.color`), used for its icon badge, tinted tile (`tint()`), timer, buttons and
+  silhouettes. No gradients except the daily hero card's soft corner light. Icons are Material rounded icons;
+  emoji are only flags (and the share text).
+- Maps (`MapPalette`): white/slate land on a soft ocean, hairline borders, no graticule, no rainbow fill. Color means
+  something: the answer (green), the pin (accent dot with a white ring), found countries in the Atlas (one color
+  per continent, `regionColor`, with a legend).
+- Answers: outlined option cards that turn into a green or red tint with a matching border and icon.
 
 ## Status (2026-10-25)
 
@@ -76,6 +93,9 @@ builds and is signed with `db171ead…`. Not checked: the share text pasted in a
 a real phone (performance of the 87k-point map on low-end devices), the themed icon on a launcher.
 
 v1.0.0 was released on 2026-10-25 (versionCode 1, CI-signed `db171ead…`) and is listed in the F-Droid repo.
+
+v1.1.0 (redesign) verified on the emulator: home light and dark, mystery country, Pin it with its reveal, Flags
+answers, Shapes, Atlas in dark mode, Capitals results.
 
 ## Emulator gotcha
 
