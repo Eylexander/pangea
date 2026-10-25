@@ -60,7 +60,7 @@ enum Mode {
     'Devine-le avant le dézoom',
     Color(0xFFC2410C),
   ),
-  pin(Icons.place_rounded, 'Pin it', 'Épingle', 'Find it on a blank map', 'Place-le sur la carte', Color(0xFF2F7BFF)),
+  pin(Icons.place_rounded, 'Pin it', 'Épingle', 'Find it on a blank globe', 'Place-le sur le globe', Color(0xFF2F7BFF)),
   daily(
     Icons.auto_awesome_rounded,
     'Mystery country',

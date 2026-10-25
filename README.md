@@ -9,7 +9,7 @@ What's in it:
   direction. Keep the streak going.
 - **Flags**, **Capitals**, **Shapes**: 60 seconds, four choices, combos if you chain right answers. At the end you
   get the list of what you missed. Those come back more often until you know them.
-- **Pin it**: ten countries to find on the map.
+- **Pin it**: ten countries to find on a blank globe.
 - **Road trip**: get from one country to another by naming the countries in between. The globe starts with just the
   two of them, and every country you name shows up on it.
 - **Neighbors**: one country on the globe, name everything it borders.

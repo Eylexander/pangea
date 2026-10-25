@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'map.dart';
 import 'world.dart';
 
 /// Colors of the globe: a softly shaded sea, plain land, hairline borders.
@@ -56,11 +57,12 @@ final _rings = <String, _Rings>{};
 
 /// Rough angular radius of a country (radians), to skip the ones on the far side.
 final _radius = <String, double>{};
-double _angularRadius(Country c) => _radius.putIfAbsent(c.id, () {
-  final b = c.bounds;
+double _angularRadius(Country c) => _radius.putIfAbsent(c.id, () => _rectRadius(c.bounds));
+
+double _rectRadius(Rect b) {
   final w = b.width * math.cos(b.center.dy * _rad), h = b.height;
   return math.min(math.pi, math.sqrt(w * w + h * h) / 2 * _rad + 0.02);
-});
+}
 
 /// Where the globe looks (radians) and how close.
 class _View {
@@ -75,6 +77,8 @@ class Globe extends StatefulWidget {
     this.fill,
     this.showAll = true,
     this.onTap,
+    this.onTapPoint,
+    this.marks = const [],
     this.spin = 0,
     this.interactive = true,
     this.look = const (10, 25),
@@ -84,6 +88,10 @@ class Globe extends StatefulWidget {
   final Color? Function(Country c)? fill;
   final bool showAll;
   final void Function(Country? c)? onTap;
+
+  /// Where the globe was tapped (lon, lat), for dropping a pin.
+  final void Function(double lon, double lat)? onTapPoint;
+  final List<MapMark> marks;
 
   /// Idle rotation in degrees per second (the home card's globe turns on its own).
   final double spin;
@@ -187,20 +195,31 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
 
   /// Turns and zooms so that all [countries] are in view.
   /// [minReach] (radians) keeps some room around small countries, so the globe stays a globe.
-  void frame(List<Country> countries, {bool animate = true, double minReach = 0.12}) {
-    if (countries.isEmpty) return;
+  /// [points] (lon, lat) are kept in view too.
+  void frame(
+    List<Country> countries, {
+    List<(double, double)> points = const [],
+    bool animate = true,
+    double minReach = 0.12,
+  }) {
+    // Each spot with its size: main landmass only (French Guiana mustn't make France span the Atlantic),
+    // and capped (Russia alone would otherwise make "Europe" the whole hemisphere).
+    final spots = [
+      for (final c in countries) (c.lon, c.lat, math.min(0.2, _rectRadius(c.mainBounds) * 0.7)),
+      for (final (lon, lat) in points) (lon, lat, 0.0),
+    ];
+    if (spots.isEmpty) return;
     var (x, y, z) = (0.0, 0.0, 0.0);
-    for (final c in countries) {
-      final la = c.lon * _rad, ph = c.lat * _rad;
+    for (final (lon, lat, _) in spots) {
+      final la = lon * _rad, ph = lat * _rad;
       x += math.cos(ph) * math.cos(la);
       y += math.cos(ph) * math.sin(la);
       z += math.sin(ph);
     }
     final lon = math.atan2(y, x), lat = math.atan2(z, math.sqrt(x * x + y * y));
     var reach = 0.0;
-    for (final c in countries) {
-      // Capped: Russia alone would otherwise make "Europe" the whole hemisphere.
-      reach = math.max(reach, _angle(lon, lat, c.lon * _rad, c.lat * _rad) + math.min(0.35, _angularRadius(c) * 0.8));
+    for (final (lo, la, size) in spots) {
+      reach = math.max(reach, _angle(lon, lat, lo * _rad, la * _rad) + size);
     }
     reach = math.max(reach, minReach);
     final zoom = reach >= math.pi / 2 ? 1.0 : 0.95 / math.sin(reach);
@@ -231,6 +250,8 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
     final ll = _unproject(p);
     if (ll == null) return widget.onTap?.call(null);
     final (lon, lat) = ll;
+    widget.onTapPoint?.call(lon, lat);
+    if (widget.onTap == null) return;
     final world = World.instance;
     for (final c in world.countries) {
       if (c.contains(lon, lat)) return widget.onTap?.call(c);
@@ -265,11 +286,14 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
         _size = box.biggest;
         // Clipped: zoomed in, the sphere is bigger than the widget.
         final paint = ClipRect(
-          child: CustomPaint(size: box.biggest, painter: _GlobePainter(_view, palette, widget.fill, widget.showAll)),
+          child: CustomPaint(
+            size: box.biggest,
+            painter: _GlobePainter(_view, palette, widget.fill, widget.showAll, widget.marks),
+          ),
         );
         if (!widget.interactive) return paint;
         return GestureDetector(
-          onTapUp: widget.onTap == null ? null : (d) => _tap(d.localPosition),
+          onTapUp: widget.onTap == null && widget.onTapPoint == null ? null : (d) => _tap(d.localPosition),
           onScaleStart: (_) {
             _held = true;
             _move.stop();
@@ -296,12 +320,13 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
 }
 
 class _GlobePainter extends CustomPainter {
-  _GlobePainter(this.view, this.palette, this.fill, this.showAll) : super(repaint: view);
+  _GlobePainter(this.view, this.palette, this.fill, this.showAll, this.marks) : super(repaint: view);
 
   final ValueNotifier<_View> view;
   final GlobePalette palette;
   final Color? Function(Country c)? fill;
   final bool showAll;
+  final List<MapMark> marks;
 
   /// Projected ring, reused between rings: x, y, and whether the point faces the viewer.
   static var _xy = Float32List(0);
@@ -401,6 +426,7 @@ class _GlobePainter extends CustomPainter {
         }
       }
     }
+    _marks(canvas, center, r, sinP0, cosP0, v);
     canvas.restore();
     canvas.drawCircle(
       center,
@@ -410,6 +436,62 @@ class _GlobePainter extends CustomPainter {
         ..strokeWidth = 1
         ..color = palette.border.withValues(alpha: 0.7),
     );
+  }
+
+  /// Pins, and lines drawn as great-circle arcs (the shortest way on a sphere), on the visible side only.
+  void _marks(Canvas canvas, Offset center, double r, double sinP0, double cosP0, _View v) {
+    Offset? at(double lon, double lat) {
+      final dl = lon * _rad - v.lam, sp = math.sin(lat * _rad), cp = math.cos(lat * _rad);
+      final cdl = math.cos(dl);
+      if (sinP0 * sp + cosP0 * cp * cdl < 0) return null;
+      return Offset(center.dx + r * cp * math.sin(dl), center.dy - r * (cosP0 * sp - sinP0 * cp * cdl));
+    }
+
+    for (final m in marks) {
+      if (m.toLon == null) {
+        final p = at(m.lon, m.lat);
+        if (p == null) continue;
+        canvas.drawCircle(
+          p.translate(0, 1),
+          10,
+          Paint()
+            ..color = Colors.black.withValues(alpha: 0.22)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        );
+        canvas.drawCircle(p, 10, Paint()..color = Colors.white);
+        canvas.drawCircle(p, 6.5, Paint()..color = m.color);
+        continue;
+      }
+      Float64List unit(double lon, double lat) => Float64List.fromList([
+        math.cos(lat * _rad) * math.cos(lon * _rad),
+        math.cos(lat * _rad) * math.sin(lon * _rad),
+        math.sin(lat * _rad),
+      ]);
+      final a = unit(m.lon, m.lat), b = unit(m.toLon!, m.toLat!);
+      final w = math.acos((a[0] * b[0] + a[1] * b[1] + a[2] * b[2]).clamp(-1.0, 1.0));
+      final path = Path();
+      var drawing = false;
+      for (var k = 0; k <= 64; k++) {
+        final t = k / 64;
+        final (ka, kb) = w < 1e-6 ? (1 - t, t) : (math.sin((1 - t) * w) / math.sin(w), math.sin(t * w) / math.sin(w));
+        final (x, y, z) = (ka * a[0] + kb * b[0], ka * a[1] + kb * b[1], ka * a[2] + kb * b[2]);
+        final p = at(math.atan2(y, x) / _rad, math.atan2(z, math.sqrt(x * x + y * y)) / _rad);
+        if (p == null) {
+          drawing = false;
+          continue;
+        }
+        drawing ? path.lineTo(p.dx, p.dy) : path.moveTo(p.dx, p.dy);
+        drawing = true;
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..color = m.color.withValues(alpha: 0.75),
+      );
+    }
   }
 
   void _graticule(Canvas canvas, Offset center, double r, _View v, double sinP0, double cosP0) {
@@ -446,5 +528,5 @@ class _GlobePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GlobePainter old) =>
-      old.palette != palette || old.fill != fill || old.showAll != showAll || old.view != view;
+      old.palette != palette || old.fill != fill || old.showAll != showAll || old.view != view || old.marks != marks;
 }

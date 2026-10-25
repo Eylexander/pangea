@@ -15,9 +15,14 @@ enum _Stat {
 
   int of(Country c) => this == population ? c.population : c.area;
   String format(Country c) => this == population ? fmtPopulation(c.population) : '${fmtInt(c.area)} km²';
+  String get title => this == population ? tr('Population', 'Population') : tr('Area', 'Superficie');
   String get label => this == population ? tr('people', 'habitants') : tr('area', 'de superficie');
-  String get more => this == population ? tr('More', 'Plus') : tr('Bigger', 'Plus grand');
-  String get less => this == population ? tr('Fewer', 'Moins') : tr('Smaller', 'Plus petit');
+  String get more => this == population ? tr('More people', 'Plus peuplé') : tr('Bigger', 'Plus grand');
+  String get less => this == population ? tr('Fewer people', 'Moins peuplé') : tr('Smaller', 'Plus petit');
+  IconData get icon => this == population ? Icons.groups_rounded : Icons.straighten_rounded;
+
+  /// Each question type has its own color, so a switch from one to the other can't be missed.
+  Color get color => this == population ? Mode.higher.color : const Color(0xFF0B9DB8);
 }
 
 /// Higher or lower: is the next country more populous (or bigger) than this one? One mistake ends the streak.
@@ -99,7 +104,6 @@ class _HigherPageState extends State<HigherPage> {
   @override
   Widget build(BuildContext context) {
     final where = widget.region?.label ?? tr('World', 'Monde');
-    final accent = Mode.higher.color;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -135,13 +139,37 @@ class _HigherPageState extends State<HigherPage> {
                             Expanded(child: _Card(_a, _stat, revealed: true)),
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 10),
-                              child: Text(
-                                tr(
-                                  'Does ${_b.name} have more or fewer ${_stat.label}?',
-                                  '${_b.name} : plus ou moins ${_stat == _Stat.population ? "d'habitants" : 'grand'} ?',
-                                ),
-                                textAlign: TextAlign.center,
-                                style: display(17, weight: FontWeight.w700),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(12, 6, 14, 6),
+                                    decoration: BoxDecoration(
+                                      color: tint(context, _stat.color, 0.16),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(_stat.icon, size: 20, color: _stat.color),
+                                        const SizedBox(width: 8),
+                                        Text(_stat.title.toUpperCase(), style: display(15, color: _stat.color)),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    tr(
+                                      _stat == _Stat.population
+                                          ? 'Does ${_b.name} have more or fewer people?'
+                                          : 'Is ${_b.name} bigger or smaller?',
+                                      _stat == _Stat.population
+                                          ? '${_b.name} : plus ou moins peuplé ?'
+                                          : '${_b.name} : plus grand ou plus petit ?',
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: display(17, weight: FontWeight.w700),
+                                  ),
+                                ],
                               ),
                             ),
                             Expanded(
@@ -154,7 +182,7 @@ class _HigherPageState extends State<HigherPage> {
                                   child: BigButton(
                                     _stat.less,
                                     icon: Icons.arrow_downward_rounded,
-                                    color: accent,
+                                    color: _stat.color,
                                     onTap: _right == null ? () => _answer(false) : null,
                                   ),
                                 ),
@@ -163,7 +191,7 @@ class _HigherPageState extends State<HigherPage> {
                                   child: BigButton(
                                     _stat.more,
                                     icon: Icons.arrow_upward_rounded,
-                                    color: accent,
+                                    color: _stat.color,
                                     onTap: _right == null ? () => _answer(true) : null,
                                   ),
                                 ),
@@ -216,14 +244,20 @@ class _Card extends StatelessWidget {
                     curve: Curves.easeOutCubic,
                     builder: (context, t, _) => Text(
                       t == 1 ? stat.format(c) : _partial(stat, c, t),
-                      style: display(22, color: color ?? Mode.higher.color),
+                      style: display(22, color: color ?? stat.color),
                     ),
                   )
                 else
                   Text('?', style: display(22, color: cs.onSurfaceVariant)),
-                Text(
-                  stat.label,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600),
+                Row(
+                  children: [
+                    Icon(stat.icon, size: 16, color: stat.color),
+                    const SizedBox(width: 4),
+                    Text(
+                      stat.label,
+                      style: TextStyle(color: stat.color, fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
               ],
             ),

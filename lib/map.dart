@@ -204,9 +204,12 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
       builder: (context, box) {
         final old = _frame;
         _frame = _Frame(box.biggest);
-        final target = old == null ? widget.view : (old.size != box.biggest ? _focused : null);
-        if (target != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => focus(target, animate: false));
+        if (old == null || old.size != box.biggest) {
+          // Read once the frame is done: a focus() asked for during this frame (next round) wins over the old one.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final target = _focused ?? widget.view;
+            if (target != null) focus(target, animate: false);
+          });
         }
         return ColoredBox(
           color: palette.ocean,

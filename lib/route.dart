@@ -111,15 +111,16 @@ class _RoutePageState extends State<RoutePage> {
     _reframe();
   }
 
-  /// Turns the globe onto the trip, and whatever has been named so far.
+  /// Turns the globe onto the trip. Far detours only pull it back while they're the latest name,
+  /// so one wild guess doesn't leave the whole trip tiny.
   void _reframe() => WidgetsBinding.instance.addPostFrameCallback(
-    // Wide enough to see the Earth curve away: it's a trip across a globe, not a map.
     (_) => _globe.currentState?.frame([
       _trip.from,
       _trip.to,
-      ..._stops,
+      ..._stops.where((c) => (_trip.detour(c) ?? 99) <= 1),
+      if (_stops.isNotEmpty) _stops.last,
       if (_over && !_solved) ..._trip.shortest(),
-    ], minReach: 0.6),
+    ], minReach: 0.2),
   );
 
   void _submit(Country c) {

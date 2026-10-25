@@ -55,9 +55,15 @@ class _NeighborsPageState extends State<NeighborsPage> {
     _frame();
   }
 
-  void _frame() => WidgetsBinding.instance.addPostFrameCallback(
-    // Room around the country from the start, for its neighbors to appear in.
-    (_) => _globe.currentState?.frame([_country, ..._found, ..._wrong, if (_roundOver) ..._neighbors], minReach: 0.45),
+  /// The country and its whole neighborhood (named or not, so answers land in view), plus the latest
+  /// wrong name while it's the latest: Japan for Belgium pulls back once, not for the rest of the round.
+  void _frame([Country? wrong]) => WidgetsBinding.instance.addPostFrameCallback(
+    // Not the overseas ones: France borders Brazil through French Guiana.
+    (_) => _globe.currentState?.frame([
+      _country,
+      ..._neighbors.where((n) => haversineKm(_country.lat, _country.lon, n.lat, n.lon) < 3000),
+      ?wrong,
+    ]),
   );
 
   void _pick(Country c) {
@@ -79,7 +85,7 @@ class _NeighborsPageState extends State<NeighborsPage> {
       }
       if (_found.length == _neighbors.length || _wrong.length >= strikes) _endRound();
     });
-    _frame();
+    _frame(right ? null : c);
   }
 
   void _endRound() {

@@ -3,12 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'globe.dart';
 import 'map.dart';
 import 'store.dart';
 import 'ui.dart';
 import 'world.dart';
 
-/// Ten countries to place on a blank map. 1000 points inside the border, fewer the farther the pin.
+/// Ten countries to place on a blank globe. 1000 points inside the border, fewer the farther the pin.
 class PinPage extends StatefulWidget {
   const PinPage({super.key, required this.region});
   final Region? region;
@@ -19,7 +20,7 @@ class PinPage extends StatefulWidget {
 
 class _PinPageState extends State<PinPage> {
   static const rounds = 10;
-  final _map = GlobalKey<WorldMapState>();
+  final _globe = GlobalKey<GlobeState>();
   final _rnd = math.Random();
   final _difficulty = Store.instance.difficulty;
   late final _pool = World.instance.pool(widget.region, _difficulty);
@@ -29,13 +30,24 @@ class _PinPageState extends State<PinPage> {
   (double, double)? _pin;
   var _revealed = false, _over = false, _record = false;
 
-  Rect get _view => widget.region?.view ?? Region.worldView;
   int get _score => _done.fold(0, (s, r) => s + r.points);
 
   @override
   void initState() {
     super.initState();
     _target = Store.instance.pick(Mode.pin.name, _pool, _rnd);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _home(animate: false));
+  }
+
+  /// Back to the whole region, or the whole globe turned anywhere (never toward the answer).
+  void _home({bool animate = true}) {
+    final r = widget.region;
+    r == null
+        ? _globe.currentState?.lookAt(_rnd.nextDouble() * 360 - 180, 20, animate: animate)
+        : _globe.currentState?.frame(
+            World.instance.inRegion(r).where((c) => c.area > 20000).toList(),
+            animate: animate,
+          );
   }
 
   void _again() => setState(() {
@@ -48,7 +60,7 @@ class _PinPageState extends State<PinPage> {
     _pin = null;
     _revealed = false;
     _target = Store.instance.pick(Mode.pin.name, _pool, _rnd, recent: _done.map((r) => r.c.id));
-    _map.currentState?.focus(_view);
+    _home();
   }
 
   void _confirm() {
@@ -62,9 +74,7 @@ class _PinPageState extends State<PinPage> {
       _done.add((c: _target, km: km, points: points));
     });
     // Show both the pin and the answer.
-    final box = _target.view.expandToInclude(Rect.fromCenter(center: Offset(lon, lat), width: 0, height: 0));
-    final margin = math.max(4.0, math.max(box.width, box.height) * 0.25);
-    _map.currentState?.focus(box.inflate(margin));
+    _globe.currentState?.frame([_target], points: [(lon, lat)]);
   }
 
   void _continue() {
@@ -115,113 +125,100 @@ class _PinPageState extends State<PinPage> {
     final pin = _pin;
     final palette = MapPalette.of(context);
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: WorldMap(
-              key: _map,
-              view: _view,
-              padding: const EdgeInsets.only(top: 190, bottom: 120, left: 16, right: 16),
-              fill: _revealed ? (c) => c == _target ? good : null : null,
-              pulse: _revealed ? _target : null,
-              pulseColor: good,
-              marks: [
-                if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, palette.ink),
-                if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.color),
-              ],
-              onTap: _revealed
-                  ? null
-                  : (lon, lat, _) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _pin = (lon, lat));
-                    },
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                  decoration: floating(context),
-                  child: Column(
-                    children: [
-                      GameBar(
-                        title: Mode.pin.title,
-                        subtitle: '$where · ${_difficulty.label}',
-                        trailing: Text(fmtInt(_score), style: display(22)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-                        child: Row(
-                          children: [
-                            Text(_target.flag, style: const TextStyle(fontSize: 36)),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    tr('Where is', 'Où se trouve'),
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(_target.name, style: display(24), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              decoration: floating(context),
+              child: Column(
+                children: [
+                  GameBar(
+                    title: Mode.pin.title,
+                    subtitle: '$where · ${_difficulty.label}',
+                    trailing: Text(fmtInt(_score), style: display(22)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+                    child: Row(
+                      children: [
+                        Text(_target.flag, style: const TextStyle(fontSize: 36)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                tr('Where is', 'Où se trouve'),
+                                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              Text(_target.name, style: display(24), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // One segment per round: green when spot on, blue when scored, gray when to come.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < rounds; i++)
+                          Expanded(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              height: 5,
+                              margin: EdgeInsets.only(right: i < rounds - 1 ? 4 : 0),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(99),
+                                color: i < _done.length
+                                    ? (_done[i].km <= 50 ? good : Mode.pin.color)
+                                    : i == _done.length
+                                    ? cs.onSurface.withValues(alpha: 0.35)
+                                    : cs.surfaceContainerHighest,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      // One segment per round: green when spot on, blue when scored, gray when to come.
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                        child: Row(
-                          children: [
-                            for (var i = 0; i < rounds; i++)
-                              Expanded(
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  height: 5,
-                                  margin: EdgeInsets.only(right: i < rounds - 1 ? 4 : 0),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(99),
-                                    color: i < _done.length
-                                        ? (_done[i].km <= 50 ? good : Mode.pin.color)
-                                        : i == _done.length
-                                        ? cs.onSurface.withValues(alpha: 0.35)
-                                        : cs.surfaceContainerHighest,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: last == null
-                        ? BigButton(
-                            key: const ValueKey('confirm'),
-                            pin == null ? tr('Tap the map', 'Touche la carte') : tr('Confirm', 'Valider'),
-                            icon: pin == null ? Icons.touch_app_rounded : Icons.check_rounded,
-                            color: Mode.pin.color,
-                            onTap: pin == null ? null : _confirm,
-                          )
-                        : _Verdict(key: ValueKey(_done.length), km: last.km, points: last.points, onNext: _continue),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Globe(
+                key: _globe,
+                fill: _revealed ? (c) => c == _target ? good : null : null,
+                marks: [
+                  if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, palette.ink),
+                  if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.color),
+                ],
+                onTapPoint: _revealed
+                    ? null
+                    : (lon, lat) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _pin = (lon, lat));
+                      },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: last == null
+                    ? BigButton(
+                        key: const ValueKey('confirm'),
+                        pin == null ? tr('Tap the globe', 'Touche le globe') : tr('Confirm', 'Valider'),
+                        icon: pin == null ? Icons.touch_app_rounded : Icons.check_rounded,
+                        color: Mode.pin.color,
+                        onTap: pin == null ? null : _confirm,
+                      )
+                    : _Verdict(key: ValueKey(_done.length), km: last.km, points: last.points, onNext: _continue),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

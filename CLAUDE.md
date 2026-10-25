@@ -69,15 +69,15 @@ python tool/build_world.py <dir>                             # assets/world.json
 | `world.dart` | `Country` (decoding, point-in-polygon with holes, distance to border, `view`, `level`, neighbors), `World` (load, search, `pool(region, difficulty)`, `distances`), `Region`, `Difficulty`, `EqualEarth` projection and its inverse, haversine/bearing, `tr()` |
 | `store.dart` | `Store` (SharedPreferences): settings (difficulty, theme, language), records per game, region and difficulty, "known" countries, misses per game (weights the picks), daily guesses and streak, road trip stats, `resetProgress` |
 | `map.dart` | `MapPalette`, `regionColor`, `WorldMap` (flat Equal Earth map: InteractiveViewer + painter, animated `focus` re-applied when the map is resized, zoom up to 300×, tap hit test with slack for tiny countries' dots, dot pins, dashed lines, pulse ring), `ShapeView` |
-| `globe.dart` | `Globe`: 3D orthographic globe (drag with inertia, pinch, tap → country, idle `spin`), `lookAt`/`frame` animated turns with a slight pull-back, `GlobePalette` |
+| `globe.dart` | `Globe`: 3D orthographic globe (drag with inertia, pinch, tap → country or `onTapPoint` → lon/lat, idle `spin`), `MapMark` pins and great-circle lines, `lookAt`/`frame` (countries and points) animated turns with a slight pull-back, `GlobePalette` |
 | `ui.dart` | Design tokens and widgets: `Mode` (icon, names, accent), `display()`, `panel()`, `floating()`, `tint()`, `fieldDecoration()`, `Bouncy`, `Shake`, `Confetti`, `Pill`, `ModeBadge`, `RegionPicker`, `Segmented`, `CountryCard`, `BigButton`, `IconSquare`, `Results`, `GameBar`, number formats |
 | `main.dart` | Theme (neutral surfaces, Plus Jakarta Sans; theme mode from Settings), home: daily hero card, difficulty, region chips, mode tiles, Road trip and Atlas cards |
 | `rush.dart` | Flags / Capitals / Shapes: 60 s, four choices from the same region, x1–x5 combo, −3 s per miss |
-| `pin.dart` | Ten countries on a blank flat map: 1000 points within 50 km, else `1000·e^(−km/800)` |
+| `pin.dart` | Ten countries on a blank globe (region framed, or the world turned to a random longitude): 1000 points within 50 km, else `1000·e^(−km/800)` |
 | `guess.dart` | Mystery country (daily or free play): six guesses, km + arrow + warmth %, region hint after 3 misses, share text |
 | `route.dart` | Road trip: `Trip` (BFS distances, `detour`, `linked`, `shortest`, `pick`) and its page, on the globe |
 | `neighbors.dart` | Neighbors: five countries, name each one's land neighbors on the globe, three strikes per country |
-| `higher.dart` | Higher or lower: population or area, more or less than the previous country, streak until a miss |
+| `higher.dart` | Higher or lower: population or area, more or less than the previous country, streak until a miss. Each stat has its own icon and color (indigo people, teal area), shown in a pill between the cards and on the buttons: players missed which one was asked |
 | `closeup.dart` | Close-up: the flat map starts on a bit of a country's border and zooms out in 5 steps (500 → 100 points) |
 | `atlas.dart` | The globe to explore, found countries in their continent's color, search sheet, country cards |
 | `settings.dart` | Difficulty, language, theme, progress and reset, version (channel `pangea/app` in `MainActivity.kt`), credits |
@@ -96,7 +96,12 @@ python tool/build_world.py <dir>                             # assets/world.json
 - Stacks with a full-screen map and a floating card: wrap the card in `Align`, or the Stack shrinks to the card.
 - `WorldMap.focus` skips maps squeezed by the keyboard and remembers the box; it's applied again (immediately,
   stopping any animation) when the map's size changes. A running animation planned for the old size used to land
-  after the resize and leave the map showing space beyond the pole.
+  after the resize and leave the map showing space beyond the pole. The box is read when the post-frame callback
+  runs, not at build: Close-up's next round resizes the map (options grid back) and the stale box used to win,
+  so the map then animated from the old country to the new one for ~2 s, showing where it was.
+- `Globe.frame` sizes each country from `mainBounds` (capped at 0.2 rad), not `bounds`: overseas parts (French
+  Guiana) made France "span the Atlantic" and every frame with it too far out. Neighbors also skips neighbors more
+  than 3000 km apart (France–Brazil).
 
 ## Design
 
@@ -109,12 +114,14 @@ python tool/build_world.py <dir>                             # assets/world.json
   silhouettes. `BigButton` picks dark or white text from its color's brightness (the ink button is light in dark
   mode). No gradients except the daily hero card's soft corner light. Icons are Material rounded icons; emoji are
   only flags (and the share text).
-- Flat maps (`MapPalette`, Pin it and Close-up): white/slate land on a soft ocean, hairline borders, no graticule.
+- Flat maps (`MapPalette`, Close-up only): white/slate land on a soft ocean, hairline borders, no graticule.
   Color means something: the answer (green), the pin (accent dot with a white ring).
 - The globe (`GlobePalette`): a softly shaded sea (lighter toward the top left, no glow), faint graticule, plain land.
   Road trip and Neighbors draw **only** the countries in play (`showAll: false`): the two ends, then each country
-  named appears, and the globe turns to frame them (`frame`, with a `minReach` that keeps the Earth's curve in
-  view). The Atlas shows every country, found ones in their continent's color; the home card's globe spins on its
+  named appears, and the globe turns to frame them. Users found the framing too far away: Neighbors frames the
+  country with its whole neighborhood (named or not) plus only the **latest** wrong guess; Road trip frames both
+  ends, stops on a shortest way or one step off, plus the latest stop (`minReach: 0.2`). A far-off wrong answer
+  pulls the globe back once, not for the rest of the round. The Atlas shows every country, found ones in their continent's color; the home card's globe spins on its
   own. Its ticker only runs while spinning or gliding, so an idle screen stays idle.
 - Answers: outlined option cards that turn into a green or red tint with a matching border and icon.
 
@@ -127,6 +134,11 @@ card), Road trip on the globe (only the trip's countries, detour colors), Neighb
 globe pulling back to a far-off wrong guess), Higher or lower (reveal), Close-up (zoom steps, points), the Atlas
 globe. Not checked: Neighbors' and Close-up's end screens, the globe's performance on a real low-end phone, the
 share text pasted in another app, the themed icon.
+
+v1.3.1 (user feedback after 1.3.0): Road trip and Neighbors too zoomed out, Higher or lower's category unclear,
+Close-up's next round animated across the map (gave the answer away), Pin it still on the flat map. All four
+fixed and checked on the emulator (Pin it on the globe with the great-circle line, Close-up starting zoomed in
+0.3 s after Next, both stats in Higher or lower, Neighbors Switzerland → Japan → back, Road trip France → Bulgaria).
 
 ## Emulator gotcha
 
