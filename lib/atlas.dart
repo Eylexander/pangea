@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'globe.dart';
 import 'map.dart';
 import 'store.dart';
 import 'ui.dart';
 import 'world.dart';
 
 /// Countries found in any game take their continent's color; the others stay plain land.
-Color? foundFill(Country c, Set<String> known) =>
-    known.contains(c.id) ? regionColor(c.region).withValues(alpha: 0.62) : null;
+Color? foundFill(Country c, Set<String> known) => known.contains(c.id) ? regionColor(c.region) : null;
 
-/// The world map to explore: tap a country to learn about it.
+/// The Earth to explore, as a globe: spin it, tap a country to learn about it.
 class AtlasPage extends StatefulWidget {
   const AtlasPage({super.key});
 
@@ -18,11 +18,19 @@ class AtlasPage extends StatefulWidget {
 }
 
 class _AtlasPageState extends State<AtlasPage> {
-  final _map = GlobalKey<WorldMapState>();
+  final _globe = GlobalKey<GlobeState>();
   late Region? _region = Store.instance.region;
   Country? _selected;
 
-  Rect _viewOf(Region? r) => r?.view ?? Region.worldView;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _show(_region));
+  }
+
+  void _show(Region? r) => r == null
+      ? _globe.currentState?.lookAt(10, 25)
+      : _globe.currentState?.frame(World.instance.inRegion(r).where((c) => c.area > 20000).toList());
 
   Future<void> _open(Country c) async {
     setState(() => _selected = c);
@@ -38,8 +46,7 @@ class _AtlasPageState extends State<AtlasPage> {
       builder: (context) => const _SearchSheet(),
     );
     if (c == null || !mounted) return;
-    final b = c.view;
-    _map.currentState?.focus(b.inflate(b.longestSide * 0.3 + 1.5));
+    _globe.currentState?.frame([c]);
     _open(c);
   }
 
@@ -51,98 +58,76 @@ class _AtlasPageState extends State<AtlasPage> {
     final pool = World.instance.inRegion(_region);
     final found = pool.where((c) => known.contains(c.id)).length;
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: WorldMap(
-              key: _map,
-              view: _viewOf(_region),
-              padding: const EdgeInsets.only(top: 200, left: 12, right: 12, bottom: 70),
-              fill: (c) => c == _selected ? palette.ink.withValues(alpha: 0.7) : foundFill(c, known),
-              pulse: _selected,
-              onTap: (lon, lat, hit) {
-                if (hit != null) _open(hit);
-              },
+      body: SafeArea(
+        child: Column(
+          children: [
+            GameBar(
+              title: Mode.atlas.title,
+              subtitle: tr('$found of ${pool.length} countries found', '$found pays trouvés sur ${pool.length}'),
+              trailing: IconSquare(
+                Icons.search_rounded,
+                size: 44,
+                tooltip: tr('Find a country', 'Chercher un pays'),
+                onTap: _search,
+              ),
             ),
-          ),
-          // Align fills the Stack like the map does; the card alone would shrink the Stack to its own height.
-          Align(
-            alignment: Alignment.topCenter,
-            child: SafeArea(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                padding: const EdgeInsets.only(bottom: 14),
-                decoration: floating(context),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GameBar(
-                      title: Mode.atlas.title,
-                      subtitle: tr(
-                        '$found of ${pool.length} countries found',
-                        '$found pays trouvés sur ${pool.length}',
-                      ),
-                      trailing: IconSquare(
-                        Icons.search_rounded,
-                        size: 44,
-                        tooltip: tr('Find a country', 'Chercher un pays'),
-                        onTap: _search,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 2, 18, 14),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(99),
-                        child: LinearProgressIndicator(
-                          value: pool.isEmpty ? 0 : found / pool.length,
-                          minHeight: 6,
-                          color: _region == null ? cs.onSurface : regionColor(_region),
-                          backgroundColor: cs.surfaceContainerHighest,
-                        ),
-                      ),
-                    ),
-                    RegionPicker(
-                      value: _region,
-                      padding: 14,
-                      onChanged: (r) {
-                        setState(() => _region = r);
-                        _map.currentState?.focus(_viewOf(r));
-                      },
-                    ),
-                  ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: pool.isEmpty ? 0 : found / pool.length,
+                  minHeight: 6,
+                  color: _region == null ? cs.onSurface : regionColor(_region),
+                  backgroundColor: cs.surfaceContainerHighest,
                 ),
               ),
             ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: SafeArea(
-              child: Container(
-                margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: floating(context, radius: 99),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final r in Region.values) ...[
+            RegionPicker(
+              value: _region,
+              onChanged: (r) {
+                setState(() => _region = r);
+                _show(r);
+              },
+            ),
+            Expanded(
+              child: Globe(
+                key: _globe,
+                look: const (10, 25),
+                fill: (c) => c == _selected ? palette.ink : foundFill(c, known),
+                onTap: (c) {
+                  if (c != null) _open(c);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  for (final r in Region.values)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Container(
                           width: 9,
                           height: 9,
                           decoration: BoxDecoration(color: regionColor(r), shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 5),
-                        Text(r.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        if (r != Region.values.last) const SizedBox(width: 12),
+                        Text(
+                          r.label,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant),
+                        ),
                       ],
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

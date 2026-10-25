@@ -122,9 +122,9 @@ class _PinPageState extends State<PinPage> {
               key: _map,
               view: _view,
               padding: const EdgeInsets.only(top: 190, bottom: 120, left: 16, right: 16),
-              fill: _revealed ? (c) => c == _target ? answer.withValues(alpha: 0.8) : null : null,
+              fill: _revealed ? (c) => c == _target ? good : null : null,
               pulse: _revealed ? _target : null,
-              pulseColor: answer,
+              pulseColor: good,
               marks: [
                 if (pin != null && _revealed) MapMark.line(pin.$1, pin.$2, _target.lon, _target.lat, palette.ink),
                 if (pin != null) MapMark.pin(pin.$1, pin.$2, Mode.pin.color),

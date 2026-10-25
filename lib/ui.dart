@@ -36,6 +36,30 @@ enum Mode {
     'Passe les frontières de A à B',
     Color(0xFF0B9DB8),
   ),
+  neighbors(
+    Icons.hub_rounded,
+    'Neighbors',
+    'Voisins',
+    'Name every country it borders',
+    'Nomme tous les pays voisins',
+    Color(0xFF5E9E12),
+  ),
+  higher(
+    Icons.swap_vert_rounded,
+    'Higher or lower',
+    'Plus ou moins',
+    'More people? Bigger? Keep the streak',
+    'Plus peuplé ? Plus grand ? Tiens la série',
+    Color(0xFF4F55E3),
+  ),
+  closeup(
+    Icons.zoom_out_map_rounded,
+    'Close-up',
+    'Gros plan',
+    'Guess it before it zooms out',
+    'Devine-le avant le dézoom',
+    Color(0xFFC2410C),
+  ),
   pin(Icons.place_rounded, 'Pin it', 'Épingle', 'Find it on a blank map', 'Place-le sur la carte', Color(0xFF2F7BFF)),
   daily(
     Icons.auto_awesome_rounded,
@@ -724,6 +748,121 @@ class Segmented<T> extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Typing a country: suggestions as chips (the first one is what Enter picks), then the field.
+class CountryInput extends StatefulWidget {
+  const CountryInput({
+    super.key,
+    required this.onPick,
+    required this.accent,
+    required this.hint,
+    this.exclude = const {},
+    this.trailing,
+  });
+  final ValueChanged<Country> onPick;
+  final Color accent;
+  final String hint;
+
+  /// Already played: not suggested.
+  final Set<Country> exclude;
+  final Widget? trailing;
+
+  @override
+  State<CountryInput> createState() => _CountryInputState();
+}
+
+class _CountryInputState extends State<CountryInput> {
+  final _input = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _input.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _pick(Country c) {
+    _input.clear();
+    widget.onPick(c);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final suggestions = World.instance
+        .search(_input.text, limit: 12)
+        .where((c) => !widget.exclude.contains(c))
+        .take(5)
+        .toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: suggestions.isEmpty ? 10 : 54,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            children: [
+              for (final c in suggestions)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Bouncy(
+                    onTap: () => _pick(c),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      alignment: Alignment.center,
+                      decoration: c == suggestions.first
+                          ? BoxDecoration(color: widget.accent, borderRadius: BorderRadius.circular(99))
+                          : panel(context, radius: 99),
+                      child: Text(
+                        '${c.flag}  ${c.name}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          color: c == suggestions.first ? Colors.white : cs.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _input,
+                  focusNode: _focus,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (suggestions.isNotEmpty) _pick(suggestions.first);
+                    _focus.requestFocus();
+                  },
+                  style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600),
+                  decoration: fieldDecoration(context, widget.hint, Icons.search_rounded, accent: widget.accent),
+                ),
+              ),
+              if (widget.trailing != null) ...[const SizedBox(width: 8), widget.trailing!],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

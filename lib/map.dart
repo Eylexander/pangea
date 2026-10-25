@@ -1,37 +1,33 @@
 import 'dart:math' as math;
 
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'world.dart';
 
-/// Colors around the Earth texture. The Earth itself (assets/earth.jpg, NASA's Blue Marble reprojected by
-/// tool/build_earth.py) is the same in light and dark themes.
+/// A calm two-tone map: neutral land on a soft ocean, hairline borders. Color is kept for what means something
+/// (the answer, a pin, the countries found).
 class MapPalette {
-  const MapPalette._();
+  const MapPalette._(this.ocean, this.land, this.border, this.territory, this.ink);
 
-  /// Around the Earth's outline; also baked into earth.jpg's corners.
-  final Color space = const Color(0xFF070B14);
-  final Color border = const Color(0x8CFFFFFF);
-  final Color ink = Colors.white;
+  final Color ocean, land, border, territory, ink;
 
-  static const earth = MapPalette._();
-  static MapPalette of(BuildContext context) => earth;
+  static const light = MapPalette._(
+    Color(0xFFDCE6F2),
+    Color(0xFFFFFFFF),
+    Color(0xFFBCC7D6),
+    Color(0xFFEEF1F6),
+    Color(0xFF1A1D29),
+  );
+  static const dark = MapPalette._(
+    Color(0xFF0B0F19),
+    Color(0xFF1E2333),
+    Color(0xFF363F57),
+    Color(0xFF151A27),
+    Color(0xFFE9ECF5),
+  );
+
+  static MapPalette of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? dark : light;
 }
-
-ui.Image? _earth;
-
-/// Decodes the Earth texture once, at startup.
-Future<void> loadEarth() async {
-  final data = await rootBundle.load('assets/earth.jpg');
-  final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-  _earth = (await codec.getNextFrame()).image;
-}
-
-/// The right answer on the Earth: yellow stands out on green land and blue sea alike.
-const answer = Color(0xFFFFD43B);
 
 /// One color per continent, for the countries found in the Atlas.
 Color regionColor(Region? r) => switch (r) {
@@ -96,7 +92,7 @@ class WorldMap extends StatefulWidget {
     this.dots = true,
   });
 
-  /// A color laid over each map unit (usually translucent); null leaves the Earth as it is.
+  /// Color of each map unit; null uses the plain land color.
   final Color? Function(Country c)? fill;
 
   /// Tap position, and the country under it (with some slack for dots of tiny countries).
@@ -162,7 +158,7 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
     // Squeezed to nothing (keyboard up): wait for a real size, see build().
     if (frame == null || area.width < 40 || area.height < 40) return;
     final r = frame.rectToLocal(EqualEarth.rect(lonLat));
-    final s = math.min(area.width / math.max(r.width, 1), area.height / math.max(r.height, 1)).clamp(1.0, 60.0);
+    final s = math.min(area.width / math.max(r.width, 1), area.height / math.max(r.height, 1)).clamp(1.0, 300.0);
     var tx = area.center.dx - s * r.center.dx, ty = area.center.dy - s * r.center.dy;
     tx = tx.clamp(size.width - s * size.width - pad.right, pad.left);
     ty = ty.clamp(size.height - s * size.height - pad.bottom, pad.top);
@@ -213,10 +209,10 @@ class WorldMapState extends State<WorldMap> with TickerProviderStateMixin {
           WidgetsBinding.instance.addPostFrameCallback((_) => focus(target, animate: false));
         }
         return ColoredBox(
-          color: palette.space,
+          color: palette.ocean,
           child: InteractiveViewer(
             transformationController: _transform,
-            maxScale: 60,
+            maxScale: 300, // Close-up starts very close
             boundaryMargin: const EdgeInsets.all(120),
             child: GestureDetector(
               onTapUp: widget.onTap == null
@@ -270,6 +266,8 @@ class _MapPainter extends CustomPainter {
   final Color pulseColor;
   final bool dots;
 
+  Color _colorOf(Country c) => fill?.call(c) ?? (c.quiz ? palette.land : palette.territory);
+
   @override
   void paint(Canvas canvas, Size size) {
     final zoom = transform.value.getMaxScaleOnAxis();
@@ -280,16 +278,7 @@ class _MapPainter extends CustomPainter {
     canvas.scale(frame.k);
     canvas.translate(-EqualEarth.world.left, -EqualEarth.world.top);
 
-    final earth = _earth;
-    if (earth != null) {
-      canvas.drawImageRect(
-        earth,
-        Rect.fromLTWH(0, 0, earth.width.toDouble(), earth.height.toDouble()),
-        EqualEarth.world,
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-    }
-    // Thin white borders, a touch heavier when zoomed in.
+    // Hairline borders, a touch heavier when zoomed in.
     final border = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = (zoom < 3 ? 0.6 : 0.9) * px
@@ -299,20 +288,18 @@ class _MapPainter extends CustomPainter {
     final world = World.instance;
     for (final c in world.units) {
       final path = countryPath(c);
-      final color = fill?.call(c);
-      if (color != null) canvas.drawPath(path, paint..color = color);
+      canvas.drawPath(path, paint..color = _colorOf(c));
       canvas.drawPath(path, border);
     }
-    // Tiny countries get a ring that stays the same size on screen.
+    // Tiny countries get a dot that stays the same size on screen.
     final ring = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2 * px
+      ..strokeWidth = px
       ..color = palette.border;
     for (final c in world.countries.where((c) => dots && c.tiny)) {
       final p = EqualEarth.project(c.lon, c.lat);
-      final color = fill?.call(c);
-      if (color != null) canvas.drawCircle(p, 3.6 * px, paint..color = color.withValues(alpha: 1));
-      canvas.drawCircle(p, 3.6 * px, ring);
+      canvas.drawCircle(p, 3.4 * px, paint..color = _colorOf(c));
+      canvas.drawCircle(p, 3.4 * px, ring);
     }
 
     final target = pulseCountry;

@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'map.dart';
+import 'globe.dart';
 import 'store.dart';
 import 'ui.dart';
 import 'world.dart';
@@ -75,9 +75,7 @@ class RoutePage extends StatefulWidget {
 class _RoutePageState extends State<RoutePage> {
   final _difficulty = Store.instance.difficulty;
   final _rnd = math.Random();
-  final _map = GlobalKey<WorldMapState>();
-  final _input = TextEditingController();
-  final _focus = FocusNode();
+  final _globe = GlobalKey<GlobeState>();
   late Trip _trip;
   final _stops = <Country>[];
   var _gaveUp = false, _shake = 0;
@@ -95,15 +93,7 @@ class _RoutePageState extends State<RoutePage> {
   @override
   void initState() {
     super.initState();
-    _input.addListener(() => setState(() {}));
     _newTrip();
-  }
-
-  @override
-  void dispose() {
-    _input.dispose();
-    _focus.dispose();
-    super.dispose();
   }
 
   void _newTrip() {
@@ -118,17 +108,19 @@ class _RoutePageState extends State<RoutePage> {
         Trip.pick(World.instance.pool(null, _difficulty), min, max, _rnd)!;
     _stops.clear();
     _gaveUp = false;
-    _input.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _map.currentState?.focus(_view()));
+    _reframe();
   }
 
-  Rect _view() {
-    var r = _trip.from.view.expandToInclude(_trip.to.view);
-    for (final c in _over ? _trip.shortest() : _stops) {
-      if (c.view.width < 60) r = r.expandToInclude(c.view);
-    }
-    return r.inflate(math.max(3, r.longestSide * 0.12));
-  }
+  /// Turns the globe onto the trip, and whatever has been named so far.
+  void _reframe() => WidgetsBinding.instance.addPostFrameCallback(
+    // Wide enough to see the Earth curve away: it's a trip across a globe, not a map.
+    (_) => _globe.currentState?.frame([
+      _trip.from,
+      _trip.to,
+      ..._stops,
+      if (_over && !_solved) ..._trip.shortest(),
+    ], minReach: 0.6),
+  );
 
   void _submit(Country c) {
     if (_over) return;
@@ -136,19 +128,18 @@ class _RoutePageState extends State<RoutePage> {
       setState(() => _shake++);
       return;
     }
-    _input.clear();
     setState(() => _stops.add(c));
     final onWay = _trip.detour(c) == 0;
     if (onWay) Store.instance.record('route', c, true);
     if (_solved) {
       Store.instance.tripDone(perfect: _stops.length == _trip.steps - 1);
-      _focus.unfocus();
+      FocusScope.of(context).unfocus();
       HapticFeedback.heavyImpact();
     } else {
       onWay ? HapticFeedback.lightImpact() : HapticFeedback.selectionClick();
-      if (_over) _focus.unfocus();
+      if (_over) FocusScope.of(context).unfocus();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _map.currentState?.focus(_view()));
+    _reframe();
   }
 
   Color _colorOf(Country c) => switch (_trip.detour(c)) {
@@ -163,13 +154,6 @@ class _RoutePageState extends State<RoutePage> {
     final where = widget.region?.label ?? tr('World', 'Monde');
     final between = _trip.steps - 1;
     final route = _over && !_solved ? _trip.shortest() : const <Country>[];
-    final suggestions = _over
-        ? const <Country>[]
-        : World.instance
-              .search(_input.text, limit: 12)
-              .where((c) => c != _trip.from && c != _trip.to && !_stops.contains(c))
-              .take(5)
-              .toList();
     final typing = !_over && MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
@@ -201,7 +185,7 @@ class _RoutePageState extends State<RoutePage> {
                 ),
                 if (!typing)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                     child: Text(
                       tr(
                         'Name the countries in between, by land. The shortest way crosses $between.',
@@ -210,34 +194,30 @@ class _RoutePageState extends State<RoutePage> {
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),
+                // Only the trip's countries are on the globe: each one named appears there.
                 Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(22)),
-                    child: WorldMap(
-                      key: _map,
-                      view: _view(),
-                      padding: const EdgeInsets.all(12),
-                      fill: (c) => c == _trip.from
-                          ? _fromColor.withValues(alpha: 0.85)
-                          : c == _trip.to
-                          ? _toColor.withValues(alpha: 0.85)
-                          : _stops.contains(c)
-                          ? _colorOf(c).withValues(alpha: 0.8)
-                          : route.contains(c)
-                          ? Colors.white.withValues(alpha: 0.55)
-                          : null,
-                    ),
+                  child: Globe(
+                    key: _globe,
+                    showAll: false,
+                    look: (_trip.from.lon + 140, 15),
+                    fill: (c) => c == _trip.from
+                        ? _fromColor
+                        : c == _trip.to
+                        ? _toColor
+                        : _stops.contains(c)
+                        ? _colorOf(c)
+                        : route.contains(c)
+                        ? cs.onSurfaceVariant.withValues(alpha: 0.55)
+                        : null,
                   ),
                 ),
                 if (_stops.isNotEmpty)
                   SizedBox(
-                    height: 44,
+                    height: 36,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      reverse: true, // newest first, right by the map
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      reverse: true, // newest first
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         for (final c in _stops.reversed)
                           Padding(
@@ -251,7 +231,24 @@ class _RoutePageState extends State<RoutePage> {
                       ],
                     ),
                   ),
-                if (_over) _ending(context, route) else ..._typing(context, suggestions),
+                if (_over)
+                  _ending(context, route)
+                else
+                  CountryInput(
+                    onPick: _submit,
+                    accent: Mode.route.color,
+                    hint: tr('A country on the way', 'Un pays sur le chemin'),
+                    exclude: {_trip.from, _trip.to, ..._stops},
+                    trailing: IconSquare(
+                      Icons.flag_outlined,
+                      tooltip: tr('Give up', 'Abandonner'),
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                        setState(() => _gaveUp = true);
+                        _reframe();
+                      },
+                    ),
+                  ),
               ],
             ),
             if (_solved) Positioned.fill(child: Confetti(key: ValueKey(_trip))),
@@ -259,81 +256,6 @@ class _RoutePageState extends State<RoutePage> {
         ),
       ),
     );
-  }
-
-  List<Widget> _typing(BuildContext context, List<Country> suggestions) {
-    final cs = Theme.of(context).colorScheme;
-    return [
-      SizedBox(
-        height: suggestions.isEmpty ? 10 : 54,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          children: [
-            for (final c in suggestions)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Bouncy(
-                  onTap: () => _submit(c),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    decoration: c == suggestions.first
-                        ? BoxDecoration(color: Mode.route.color, borderRadius: BorderRadius.circular(99))
-                        : panel(context, radius: 99),
-                    child: Text(
-                      '${c.flag}  ${c.name}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
-                        color: c == suggestions.first ? Colors.white : cs.onSurface,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _input,
-                focusNode: _focus,
-                autocorrect: false,
-                enableSuggestions: false,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (suggestions.isNotEmpty) _submit(suggestions.first);
-                  _focus.requestFocus();
-                },
-                style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w600),
-                decoration: fieldDecoration(
-                  context,
-                  tr('A country on the way', 'Un pays sur le chemin'),
-                  Icons.search_rounded,
-                  accent: Mode.route.color,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconSquare(
-              Icons.flag_outlined,
-              tooltip: tr('Give up', 'Abandonner'),
-              onTap: () => setState(() {
-                _gaveUp = true;
-                _focus.unfocus();
-                WidgetsBinding.instance.addPostFrameCallback((_) => _map.currentState?.focus(_view()));
-              }),
-            ),
-          ],
-        ),
-      ),
-    ];
   }
 
   Widget _ending(BuildContext context, List<Country> route) {

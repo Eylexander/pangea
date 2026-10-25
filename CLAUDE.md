@@ -2,8 +2,9 @@
 
 Pangea: a geography game for Android (Flutter, plus a one-method Kotlin channel for the version). Written for the
 user, who likes testing and learning geography. They asked for something fun with a vibrant UI, then (after v1.0.0)
-for a modern one: the first look (Lilita One, rainbow map, colored glows) was "fun but not modern", and (after v1.1.0)
-for a map that looks like the Earth rather than a map. See Design. English or French: the phone's language, or the
+for a modern one: the first look (Lilita One, rainbow map, colored glows) was "fun but not modern". v1.2.0 laid NASA
+imagery over the map; that was a misreading: "more earth than map" meant **a globe**, and the texture was removed in
+v1.3.0 (back to the two-tone map, plus a 3D globe). See Design. English or French: the phone's language, or the
 one picked in Settings (`language`/`tr()` in `lib/world.dart`). Offline, no network permission.
 
 ## Toolchain
@@ -19,10 +20,7 @@ dart format -l 120 lib test                                  # 120-col lines
 flutter build apk --debug --target-platform android-x64      # emulator; package com.eylexander.pangea.debug
 flutter build apk --release --target-platform android-arm64  # ~19 MB
 python tool/build_world.py <dir>                             # assets/world.json (see Data)
-python tool/build_earth.py <dir>                             # assets/earth.jpg; needs numpy and Pillow
 ```
-
-numpy and Pillow aren't installed system-wide: use a throwaway venv (`python -m venv …; pip install numpy pillow`).
 
 ## Releasing (same scheme as the other apps of `../fdroid`)
 
@@ -33,7 +31,7 @@ numpy and Pillow aren't installed system-wide: use a throwaway venv (`python -m 
   person, no emoji headers or "What's Changed" lists. The shared workflow generates notes; replace them right after
   with `gh release edit vX.Y.Z -R Eylexander/pangea --notes-file …`. The F-Droid listing also keeps a changelog per
   version, same tone (`../fdroid/metadata/com.eylexander.pangea/<locale>/changelogs/<versionCode>.txt`, versionCode
-  = the release run's number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3), but F-Droid clients don't show them for this
+  = the release run's number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3, v1.3.0 = 4), but F-Droid clients don't show them for this
   repo; see `../fdroid/CLAUDE.md`.
 - Keep `version:` in pubspec.yaml in step with the tag (CI overrides it, but debug builds show it in Settings).
 - Release key: `.secrets/` (git-ignored), the shared key, SHA-256 `db171ead…`. CI gets it from the
@@ -63,9 +61,6 @@ numpy and Pillow aren't installed system-wide: use a throwaway venv (`python -m 
 - `area` is computed (km²), `pop` is Natural Earth's estimate, `lx/ly` its label point: used for distances and
   directions in the mystery game, and for the rings of tiny countries.
 
-`tool/build_earth.py` → `assets/earth.jpg` (4096×1791, 900 KB): NASA Blue Marble Next Generation, July 2004, with
-topography and bathymetry (public domain), reprojected to Equal Earth over exactly `EqualEarth.world` (84 N to
-58 S). Corners outside the Earth are the app's space color `#070B14`. July: the least snow where most countries are.
 
 ## Architecture (`lib/`)
 
@@ -73,14 +68,18 @@ topography and bathymetry (public domain), reprojected to Equal Earth over exact
 | --- | --- |
 | `world.dart` | `Country` (decoding, point-in-polygon with holes, distance to border, `view`, `level`, neighbors), `World` (load, search, `pool(region, difficulty)`, `distances`), `Region`, `Difficulty`, `EqualEarth` projection and its inverse, haversine/bearing, `tr()` |
 | `store.dart` | `Store` (SharedPreferences): settings (difficulty, theme, language), records per game, region and difficulty, "known" countries, misses per game (weights the picks), daily guesses and streak, road trip stats, `resetProgress` |
-| `map.dart` | `loadEarth`, `MapPalette`, `regionColor`, `answer`, `WorldMap` (InteractiveViewer + painter over the Earth texture, animated `focus` re-applied when the map is resized, tap hit test with slack for tiny countries' rings, dot pins, dashed lines, pulse ring), `ShapeView` |
+| `map.dart` | `MapPalette`, `regionColor`, `WorldMap` (flat Equal Earth map: InteractiveViewer + painter, animated `focus` re-applied when the map is resized, zoom up to 300×, tap hit test with slack for tiny countries' dots, dot pins, dashed lines, pulse ring), `ShapeView` |
+| `globe.dart` | `Globe`: 3D orthographic globe (drag with inertia, pinch, tap → country, idle `spin`), `lookAt`/`frame` animated turns with a slight pull-back, `GlobePalette` |
 | `ui.dart` | Design tokens and widgets: `Mode` (icon, names, accent), `display()`, `panel()`, `floating()`, `tint()`, `fieldDecoration()`, `Bouncy`, `Shake`, `Confetti`, `Pill`, `ModeBadge`, `RegionPicker`, `Segmented`, `CountryCard`, `BigButton`, `IconSquare`, `Results`, `GameBar`, number formats |
 | `main.dart` | Theme (neutral surfaces, Plus Jakarta Sans; theme mode from Settings), home: daily hero card, difficulty, region chips, mode tiles, Road trip and Atlas cards |
 | `rush.dart` | Flags / Capitals / Shapes: 60 s, four choices from the same region, x1–x5 combo, −3 s per miss |
-| `pin.dart` | Ten countries on the Earth: 1000 points within 50 km, else `1000·e^(−km/800)` |
+| `pin.dart` | Ten countries on a blank flat map: 1000 points within 50 km, else `1000·e^(−km/800)` |
 | `guess.dart` | Mystery country (daily or free play): six guesses, km + arrow + warmth %, region hint after 3 misses, share text |
-| `route.dart` | Road trip: `Trip` (BFS distances, `detour`, `linked`, `shortest`, `pick`) and its page |
-| `atlas.dart` | Explorable Earth with found countries tinted by continent, search sheet, country cards |
+| `route.dart` | Road trip: `Trip` (BFS distances, `detour`, `linked`, `shortest`, `pick`) and its page, on the globe |
+| `neighbors.dart` | Neighbors: five countries, name each one's land neighbors on the globe, three strikes per country |
+| `higher.dart` | Higher or lower: population or area, more or less than the previous country, streak until a miss |
+| `closeup.dart` | Close-up: the flat map starts on a bit of a country's border and zooms out in 5 steps (500 → 100 points) |
+| `atlas.dart` | The globe to explore, found countries in their continent's color, search sheet, country cards |
 | `settings.dart` | Difficulty, language, theme, progress and reset, version (channel `pangea/app` in `MainActivity.kt`), credits |
 
 - Difficulty: Easy plays level 1, Normal ≤ 2, Hard everything with level 3 picked twice as often. A continent with
@@ -110,21 +109,24 @@ topography and bathymetry (public domain), reprojected to Equal Earth over exact
   silhouettes. `BigButton` picks dark or white text from its color's brightness (the ink button is light in dark
   mode). No gradients except the daily hero card's soft corner light. Icons are Material rounded icons; emoji are
   only flags (and the share text).
-- Maps show the Earth (same in light and dark themes) with thin white borders. Color means something, as
-  translucent fills: the answer (yellow `answer`, readable on land and sea), the pin (accent dot with a white ring),
-  road trip ends (blue, pink) and stops (green / amber / red), found countries in the Atlas (one color per continent,
-  `regionColor`, with a legend). Tiny countries get a white ring (not on the home preview).
+- Flat maps (`MapPalette`, Pin it and Close-up): white/slate land on a soft ocean, hairline borders, no graticule.
+  Color means something: the answer (green), the pin (accent dot with a white ring).
+- The globe (`GlobePalette`): a softly shaded sea (lighter toward the top left, no glow), faint graticule, plain land.
+  Road trip and Neighbors draw **only** the countries in play (`showAll: false`): the two ends, then each country
+  named appears, and the globe turns to frame them (`frame`, with a `minReach` that keeps the Earth's curve in
+  view). The Atlas shows every country, found ones in their continent's color; the home card's globe spins on its
+  own. Its ticker only runs while spinning or gliding, so an idle screen stays idle.
 - Answers: outlined option cards that turn into a green or red tint with a matching border and icon.
 
 ## Status (2026-10-25)
 
-v1.0.0 (versionCode 1) and v1.1.0 (2) are released and listed in the F-Droid repo.
+v1.0.0 (versionCode 1), v1.1.0 (2) and v1.2.0 (3) are released and listed in the F-Droid repo.
 
-v1.2.0 verified on the API 36 emulator (debug, dark mode, English and French): home with difficulty and Road trip,
-Road trip (detour colors, perfect trip, keyboard open and closed), Settings (language switch applies at once,
-version shown), Free play button readable in dark mode, Pin it and the Atlas on the Earth. Earlier versions
-verified everything else (rushes, results, mystery country, light mode). Not checked: a real phone (Earth texture
-memory and map performance on low-end devices), the share text pasted in another app, the themed icon.
+v1.3.0 verified on the API 36 emulator (debug, light and dark, French): home (8 tiles, spinning globe on the Atlas
+card), Road trip on the globe (only the trip's countries, detour colors), Neighbors (found, wrong, strikes, the
+globe pulling back to a far-off wrong guess), Higher or lower (reveal), Close-up (zoom steps, points), the Atlas
+globe. Not checked: Neighbors' and Close-up's end screens, the globe's performance on a real low-end phone, the
+share text pasted in another app, the themed icon.
 
 ## Emulator gotcha
 
@@ -134,4 +136,4 @@ normal. It isn't the app: same APK, fine after `adb reboot`.
 
 ## Ideas
 
-Sounds, a borders mode ("which countries touch X?"), capitals on the map, more languages, a 3D globe for the Atlas.
+Sounds, capitals on the map, more languages, a daily road trip, landlocked/coastal quizzes, timezone or hemisphere guessing.

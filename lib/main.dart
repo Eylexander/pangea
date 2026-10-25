@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'atlas.dart';
+import 'closeup.dart';
+import 'globe.dart';
 import 'guess.dart';
+import 'higher.dart';
 import 'map.dart';
+import 'neighbors.dart';
 import 'pin.dart';
 import 'route.dart';
 import 'rush.dart';
@@ -15,7 +19,7 @@ import 'world.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  await Future.wait([World.load(), Store.load(), loadEarth()]);
+  await Future.wait([World.load(), Store.load()]);
   runApp(const PangeaApp());
 }
 
@@ -134,20 +138,30 @@ class Home extends StatelessWidget {
                     crossAxisSpacing: 12,
                     childAspectRatio: 1.02,
                     children: [
-                      for (final m in [Mode.flags, Mode.capitals, Mode.shapes, Mode.pin])
+                      for (final m in [
+                        Mode.flags,
+                        Mode.capitals,
+                        Mode.shapes,
+                        Mode.pin,
+                        Mode.route,
+                        Mode.neighbors,
+                        Mode.higher,
+                        Mode.closeup,
+                      ])
                         _ModeTile(
                           mode: m,
-                          best: store.best(m.name, region),
-                          onTap: () =>
-                              _go(context, m == Mode.pin ? PinPage(region: region) : RushPage(mode: m, region: region)),
+                          best: m == Mode.route ? store.tripsPerfect : store.best(m.name, region),
+                          onTap: () => _go(context, switch (m) {
+                            Mode.pin => PinPage(region: region),
+                            Mode.route => RoutePage(region: region),
+                            Mode.neighbors => NeighborsPage(region: region),
+                            Mode.higher => HigherPage(region: region),
+                            Mode.closeup => CloseupPage(region: region),
+                            _ => RushPage(mode: m, region: region),
+                          }),
                         ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _RouteTile(onTap: () => _go(context, RoutePage(region: region))),
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -321,53 +335,7 @@ class _ModeTile extends StatelessWidget {
   }
 }
 
-/// Road trip: wide, with its stats.
-class _RouteTile extends StatelessWidget {
-  const _RouteTile({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    const mode = Mode.route;
-    final store = Store.instance;
-    return Bouncy(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: panel(context, color: tint(context, mode.color), border: mode.color.withValues(alpha: 0.16)),
-        child: Row(
-          children: [
-            const ModeBadge(mode, size: 38),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(mode.title, style: display(18)),
-                  Text(
-                    mode.hint,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            if (store.tripsDone > 0) ...[
-              Icon(Icons.emoji_events_rounded, size: 16, color: mode.color),
-              const SizedBox(width: 4),
-              Text(
-                '${store.tripsPerfect}/${store.tripsDone}',
-                style: display(14, color: mode.color, weight: FontWeight.w700),
-              ),
-            ] else
-              Icon(Icons.arrow_forward_rounded, size: 18, color: mode.color),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+/// The Atlas, with a globe turning slowly on its own, colored with the countries found.
 class _AtlasTile extends StatelessWidget {
   const _AtlasTile({required this.onTap});
   final VoidCallback onTap;
@@ -379,40 +347,40 @@ class _AtlasTile extends StatelessWidget {
     return Bouncy(
       onTap: onTap,
       child: Container(
+        height: 168,
         decoration: panel(context),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
-              child: Row(
-                children: [
-                  const ModeBadge(Mode.atlas, size: 38),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(Mode.atlas.title, style: display(18)),
-                        Text(
-                          Mode.atlas.hint,
-                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 4, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ModeBadge(Mode.atlas, size: 38),
+                    const Spacer(),
+                    Text(Mode.atlas.title, style: display(18)),
+                    Text(
+                      Mode.atlas.hint,
+                      maxLines: 2,
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5, fontWeight: FontWeight.w500),
                     ),
-                  ),
-                  Text(
-                    '${known.length}/${World.instance.countries.length}',
-                    style: display(15, color: cs.onSurfaceVariant, weight: FontWeight.w700),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      tr(
+                        '${known.length}/${World.instance.countries.length} found',
+                        '${known.length}/${World.instance.countries.length} trouvés',
+                      ),
+                      style: display(14, color: Mode.atlas.color, weight: FontWeight.w700),
+                    ),
+                  ],
+                ),
               ),
             ),
             SizedBox(
-              height: 150,
-              child: IgnorePointer(child: WorldMap(fill: (c) => foundFill(c, known), dots: false)),
+              width: 168,
+              child: Globe(spin: 9, interactive: false, look: const (20, 22), fill: (c) => foundFill(c, known)),
             ),
           ],
         ),

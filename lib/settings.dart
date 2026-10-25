@@ -128,14 +128,6 @@ class SettingsPage extends StatelessWidget {
                   onTap: () => _copy(context, _repo),
                 ),
                 _Row(
-                  Icons.public_rounded,
-                  tr('Earth imagery', 'Images de la Terre'),
-                  subtitle: tr(
-                    'NASA Blue Marble, July 2004 (public domain)',
-                    'NASA Blue Marble, juillet 2004 (domaine public)',
-                  ),
-                ),
-                _Row(
                   Icons.border_style_rounded,
                   tr('Borders and countries', 'Frontières et pays'),
                   subtitle: tr('Natural Earth (public domain)', 'Natural Earth (domaine public)'),
