@@ -31,7 +31,7 @@ python tool/build_world.py <dir>                             # assets/world.json
   person, no emoji headers or "What's Changed" lists. The shared workflow generates notes; replace them right after
   with `gh release edit vX.Y.Z -R Eylexander/pangea --notes-file …`. The F-Droid listing also keeps a changelog per
   version, same tone (`../fdroid/metadata/com.eylexander.pangea/<locale>/changelogs/<versionCode>.txt`, versionCode
-  = the release run's number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3, v1.3.0 = 4), but F-Droid clients don't show them for this
+  = the release run's number: v1.0.0 = 1, v1.1.0 = 2, v1.2.0 = 3, v1.3.0 = 4, v1.3.1 = 5, v1.3.2 = 7: rebuilt once, 6 is gone), but F-Droid clients don't show them for this
   repo; see `../fdroid/CLAUDE.md`.
 - Keep `version:` in pubspec.yaml in step with the tag (CI overrides it, but debug builds show it in Settings).
 - Release key: `.secrets/` (git-ignored), the shared key, SHA-256 `db171ead…`. CI gets it from the
@@ -102,6 +102,10 @@ python tool/build_world.py <dir>                             # assets/world.json
 - `Globe.frame` sizes each country from `mainBounds` (capped at 0.2 rad), not `bounds`: overseas parts (French
   Guiana) made France "span the Atlantic" and every frame with it too far out. Neighbors also skips neighbors more
   than 3000 km apart (France–Brazil).
+- The globe's scale comes from its width and the tallest height seen at that width: the keyboard (Neighbors, Road
+  trip) used to shrink it, which looked like zooming out on every answer.
+- Close-up starts at 18% of the country's size (closer, the simplified outlines are straight lines) and keeps the
+  border point in view until the last step (moving to the center early showed only the country's color).
 
 ## Design
 
@@ -139,6 +143,10 @@ v1.3.1 (user feedback after 1.3.0): Road trip and Neighbors too zoomed out, High
 Close-up's next round animated across the map (gave the answer away), Pin it still on the flat map. All four
 fixed and checked on the emulator (Pin it on the globe with the great-circle line, Close-up starting zoomed in
 0.3 s after Next, both stats in Higher or lower, Neighbors Switzerland → Japan → back, Road trip France → Bulgaria).
+
+v1.3.2 (user feedback): Neighbors looked zoomed out on each answer (the keyboard shrank the globe), Close-up's
+borders too coarse and its middle steps all inside the country. Fixed, analyze and tests pass; not checked on the
+emulator.
 
 ## Emulator gotcha
 

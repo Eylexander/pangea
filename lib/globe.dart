@@ -115,8 +115,9 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
   var _vLam = 0.0, _vPhi = 0.0, _startZoom = 1.0;
   var _held = false;
   Size _size = Size.zero;
+  var _fullHeight = 0.0;
 
-  double get _radiusAt1 => math.min(_size.width, _size.height) / 2 * 0.92;
+  double get _radiusAt1 => math.min(_size.width, _fullHeight) / 2 * 0.92;
 
   @override
   void initState() {
@@ -283,6 +284,8 @@ class GlobeState extends State<Globe> with TickerProviderStateMixin {
     final palette = GlobePalette.of(context);
     return LayoutBuilder(
       builder: (context, box) {
+        // The keyboard squeezes the globe (Neighbors, Road trip): keep the full height's scale, or it looks zoomed out.
+        if (box.maxWidth != _size.width || box.maxHeight > _fullHeight) _fullHeight = box.maxHeight;
         _size = box.biggest;
         // Clipped: zoomed in, the sphere is bigger than the widget.
         final paint = ClipRect(

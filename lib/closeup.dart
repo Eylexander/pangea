@@ -65,13 +65,17 @@ class _CloseupPageState extends State<CloseupPage> {
     final start = Offset(ring[i], ring[i + 1]);
     final end = _target.view;
     final endSize = end.longestSide * 1.9 + 2;
-    final startSize = math.max(0.35, end.longestSide * 0.07);
+    // Not closer: outlines are simplified relative to the country's size, so up close they're straight lines.
+    final startSize = math.max(0.35, end.longestSide * 0.18);
+    final d = end.center - start;
     _steps = [
       for (var k = 0; k < levels; k++)
         () {
           final t = k / (levels - 1);
           final size = startSize * math.pow(endSize / startSize, t);
-          final c = Offset.lerp(start, end.center, t)!;
+          // Toward the middle, but the border stays in view until the last step: inside, it's all one color.
+          final shift = k == levels - 1 ? d.distance : math.min(t * d.distance, size * 0.3);
+          final c = Offset.lerp(start, end.center, d.distance == 0 ? 1 : shift / d.distance)!;
           return Rect.fromCenter(center: c, width: size, height: size);
         }(),
     ];
